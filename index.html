@@ -22968,31 +22968,36 @@ window.__mochiBootRetry = function () { try { location.reload(); } catch (e) {} 
        两者都必须存在；构建产物在 </html> 后还会再写一份 __MOCHI_EOF__ 兜底注释。 -->
   <span id="mochi-html-eof" hidden aria-hidden="true"></span>
 <!-- __MOCHI_EOF__ -->
-     <script>
-// 自动跳过开屏公告脚本
-document.addEventListener('DOMContentLoaded', () => {
-    const skipSplash = setInterval(() => {
-        // 1. 自动勾选年龄确认
-        const ageCheck = document.getElementById('splash-age-check');
-        if (ageCheck && !ageCheck.checked) {
-            ageCheck.checked = true;
-            ageCheck.dispatchEvent(new Event('change', { bubbles: true }));
-        }
+   <style>
+/* 强制隐藏所有开屏遮罩层的父级容器 */
+.splash-mandatory, .splash-footer, .splash-loading, 
+[class*="splash-mandatory"], [class*="splash-footer"],
+[class*="splash-enter"], [id*="splash"] {
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+</style>
 
-        // 2. 暴力开启“我已阅读并知晓”按钮（解除 hidden 和 disabled 状态）
-        const enterBtn = document.getElementById('splash-enter');
-        if (enterBtn) {
-            enterBtn.removeAttribute('hidden');
-            enterBtn.style.display = 'block'; // 确保能看到
-            enterBtn.style.pointerEvents = 'auto'; // 解除点击限制
-            
-            // 3. 如果按钮出现了，就点它
-            if (enterBtn.textContent.includes('我已阅读')) {
-                enterBtn.click();
-                clearInterval(skipSplash); // 成功进入后停止检测
-            }
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // 强行解除页面的滚动锁定和点击限制
+    document.body.style.overflow = 'auto';
+    document.body.style.pointerEvents = 'auto';
+    
+    // 暴力尝试点击进入，骗过底层 JS
+    const forceEnter = () => {
+        const btn = document.getElementById('splash-enter');
+        if (btn) {
+            btn.removeAttribute('disabled');
+            btn.click();
         }
-    }, 100); // 每0.1秒检查一次，极速跳过
+        // 如果发现依然有黑乎乎的遮罩，直接把它从 DOM 树里删掉
+        document.querySelectorAll('.splash-mandatory, .splash-footer').forEach(el => el.remove());
+    };
+    
+    // 轮询执行，防止原网页 JS 后来又把遮罩加回来
+    setInterval(forceEnter, 200);
 });
 </script>
 </body>
