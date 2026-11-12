@@ -162,10 +162,82 @@ CC_ALL_TYPES.forEach(t => { out[t] = (ownF[t] || []).concat(pubF[t] || []); });
 Object.keys(ownF).forEach(t => { if (!(t in out)) out[t] = ownF[t]; });
 return out;
 }
-function replyPoolGroups() { return mergeFiltered(ownPoolRaw(), pubGroupsRaw()); }
+/* ================= 新增：合并 my-audit-cards ================= */
+
+// 读取 my-audit-cards 原始数据（数组）
+function getMyAuditCardsRaw(cid) {
+    try {
+        let store = null;
+
+        if (cid !== undefined && cid !== null && window.storeFor) {
+            store = window.storeFor(cid);
+        }
+        if (!store && cid !== undefined && cid !== null && window.xyStore) {
+            store = window.xyStore('xy-home-v2:' + cid);
+        }
+        if (!store && window.storeFor) {
+            store = window.storeFor();
+        }
+        if (!store && window.xyStore) {
+            store = window.xyStore('xy-home-v2');
+        }
+
+        if (!store || typeof store.get !== 'function') return [];
+
+        const raw = store.get('my-audit-cards');
+        return Array.isArray(raw) ? raw : [];
+    } catch (e) {
+        console.warn('[replyPool] 读取 my-audit-cards 失败:', e);
+        return [];
+    }
+}
+
+// 把 my-audit-cards 的扁平数组转成 { [type]: [cards] } 分组格式
+// 同时过滤掉 isDisabled: true 的卡
+function myAuditCardsToGroups(cards) {
+    const groups = {};
+    (cards || []).forEach(card => {
+        if (!card) return;
+        if (card.isDisabled === true || card.isDisabled === 'true') return;
+
+        const t = card.type || card.cardType || card.ccType || card.groupType;
+        if (!t) return;
+
+        if (!groups[t]) groups[t] = [];
+        groups[t].push(card);
+    });
+    return groups;
+}
+
+// 把 my-audit-cards 的分组合并进 base（base 已是 { [type]: [cards] } 格式）
+function mergeMyAuditGroups(base, cid) {
+    const myGroups = myAuditCardsToGroups(getMyAuditCardsRaw(cid));
+    const types = Object.keys(myGroups);
+    if (!types.length) return base;
+
+    const out = Object.assign({}, base);
+    types.forEach(t => {
+        out[t] = (out[t] || []).concat(myGroups[t]);
+    });
+    return out;
+}
+
+/* ================= 替换原来的两个入口函数 ================= */
+
+function replyPoolGroups() {
+    const base = mergeFiltered(ownPoolRaw(), pubGroupsRaw());
+    return mergeMyAuditGroups(base);
+}
+
 function replyPoolGroupsFor(cid) {
-const raw = (window.storeFor && window.storeFor(cid) || window.xyStore('xy-home-v2:' + cid)).get('cc-groups');
-return mergeFiltered(buildGroupsFrom(raw), pubGroupsRaw());
+    const store =
+        (window.storeFor && window.storeFor(cid)) ||
+        window.xyStore('xy-home-v2:' + cid);
+
+    const raw = store.get('cc-groups');
+    const base = mergeFiltered(buildGroupsFrom(raw), pubGroupsRaw());
+
+    return mergeMyAuditGroups(base, cid);
 }
 const BUILTIN = {
 text: [
