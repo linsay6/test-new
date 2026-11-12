@@ -22968,6 +22968,33 @@ window.__mochiBootRetry = function () { try { location.reload(); } catch (e) {} 
        两者都必须存在；构建产物在 </html> 后还会再写一份 __MOCHI_EOF__ 兜底注释。 -->
   <span id="mochi-html-eof" hidden aria-hidden="true"></span>
 <!-- __MOCHI_EOF__ -->
+     <script>
+// 自动跳过开屏公告脚本
+document.addEventListener('DOMContentLoaded', () => {
+    const skipSplash = setInterval(() => {
+        // 1. 自动勾选年龄确认
+        const ageCheck = document.getElementById('splash-age-check');
+        if (ageCheck && !ageCheck.checked) {
+            ageCheck.checked = true;
+            ageCheck.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        // 2. 暴力开启“我已阅读并知晓”按钮（解除 hidden 和 disabled 状态）
+        const enterBtn = document.getElementById('splash-enter');
+        if (enterBtn) {
+            enterBtn.removeAttribute('hidden');
+            enterBtn.style.display = 'block'; // 确保能看到
+            enterBtn.style.pointerEvents = 'auto'; // 解除点击限制
+            
+            // 3. 如果按钮出现了，就点它
+            if (enterBtn.textContent.includes('我已阅读')) {
+                enterBtn.click();
+                clearInterval(skipSplash); // 成功进入后停止检测
+            }
+        }
+    }, 100); // 每0.1秒检查一次，极速跳过
+});
+</script>
 </body>
 </html>
 <!-- __MOCHI_EOF__ mvun297n -->
