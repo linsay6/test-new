@@ -164,54 +164,48 @@ return out;
 }
 /* ================= 新增：合并 my-audit-cards ================= */
 
-// 读取 my-audit-cards 原始数据（数组）
+// 读取 my-audit-cards 原始数据
 function getMyAuditCardsRaw(cid) {
     try {
-        let store = null;
-
-        if (cid !== undefined && cid !== null && window.storeFor) {
-            store = window.storeFor(cid);
-        }
-        if (!store && cid !== undefined && cid !== null && window.xyStore) {
-            store = window.xyStore('xy-home-v2:' + cid);
-        }
-        if (!store && window.storeFor) {
-            store = window.storeFor();
-        }
-        if (!store && window.xyStore) {
-            store = window.xyStore('xy-home-v2');
-        }
-
-        if (!store || typeof store.get !== 'function') return [];
-
-        const raw = store.get('my-audit-cards');
-        return Array.isArray(raw) ? raw : [];
+        // 直接从 localStorage 读取，避开各种 store 的坑
+        const rawStr = localStorage.getItem('my-audit-cards');
+        if (!rawStr) return null;
+        return JSON.parse(rawStr);
     } catch (e) {
         console.warn('[replyPool] 读取 my-audit-cards 失败:', e);
-        return [];
+        return null;
     }
 }
 
-// 把 my-audit-cards 的扁平数组转成 { [type]: [cards] } 分组格式
-// 同时过滤掉 isDisabled: true 的卡
-function myAuditCardsToGroups(cards) {
+// 把复杂的 my-audit-cards 转成 { [type]: [cards] } 分组格式
+function myAuditCardsToGroups(data) {
     const groups = {};
-    (cards || []).forEach(card => {
-        if (!card) return;
-        if (card.isDisabled === true || card.isDisabled === 'true') return;
-
-        const t = card.type || card.cardType || card.ccType || card.groupType;
-        if (!t) return;
-
-        if (!groups[t]) groups[t] = [];
-        groups[t].push(card);
+    if (!data || !data.groups) return groups;
+    
+    // 遍历你真实的分类（如'情话', '主谓宾'）
+    Object.keys(data.groups).forEach(catName => {
+        const cardList = data.groups[catName];
+        if (!Array.isArray(cardList)) return;
+        
+        cardList.forEach(card => {
+            if (!card) return;
+            // 过滤掉被禁用的
+            if (card.isDisabled === true || card.isDisabled === 'true') return;
+            
+            // 取分类名，原代码用 card.ccType
+            const t = card.ccType || catName; 
+            
+            if (!groups[t]) groups[t] = [];
+            groups[t].push(card);
+        });
     });
     return groups;
 }
 
-// 把 my-audit-cards 的分组合并进 base（base 已是 { [type]: [cards] } 格式）
+// 把 my-audit-cards 的分组合并进 base
 function mergeMyAuditGroups(base, cid) {
-    const myGroups = myAuditCardsToGroups(getMyAuditCardsRaw(cid));
+    const myData = getMyAuditCardsRaw(cid);
+    const myGroups = myAuditCardsToGroups(myData);
     const types = Object.keys(myGroups);
     if (!types.length) return base;
 
