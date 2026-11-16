@@ -1392,3 +1392,219 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
         init();
     }
 })();
+/* ============================================================
+ * 一键静默发送引擎 (三层保险机制)
+ * ============================================================ */
+window.sendAuditCard = function(text) {
+    if (!text || typeof text !== 'string') return;
+
+    try {
+        /* ----------------------------------------------------
+         * 准备阶段：将数据写入 localStorage 核心仓库
+         * ---------------------------------------------------- */
+        const STORAGE_KEY = 'xy-home-v2:default:chat-msgs';
+        let msgs = [];
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) msgs = JSON.parse(raw);
+            if (!Array.isArray(msgs)) msgs = [];
+        } catch (e) {
+            console.warn('[sendAuditCard] 读取本地消息库失败，将使用空数组', e);
+        }
+
+        const newMsg = {
+            side: 'in', // 对方视角
+            text: text,
+            time: Date.now()
+        };
+        msgs.push(newMsg);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs));
+
+        // 辅助获取聊天滚动容器
+        function getChatContainer() {
+            // 尝试寻找通常的聊天列表容器，你可以根据实际情况增加选择器
+            return document.querySelector('.chat-list') || 
+                   document.querySelector('#chat-list') || 
+                   document.querySelector('.msg-list') || 
+                   document.querySelector('.chat-messages') ||
+                   document.querySelector('.chat-body');
+        }
+
+        /* ----------------------------------------------------
+         * 第一层：官方渲染接口 (最稳妥)
+         * ---------------------------------------------------- */
+        try {
+            if (typeof window.renderWindow === 'function') {
+                // 传入 forceSync = true 强制同步渲染
+                window.renderWindow(false, false, true);
+                if (typeof window.scrollToBottom === 'function') {
+                    window.scrollToBottom();
+                }
+                console.log('[sendAuditCard] 第一层官方渲染成功');
+                return;
+            }
+        } catch (err) {
+            console.warn('[sendAuditCard] 第一层官方渲染失败，降级至 DOM 克隆', err);
+        }
+
+        /* ----------------------------------------------------
+         * 第二层：DOM 克隆法 (严格过滤复杂节点)
+         * ---------------------------------------------------- */
+        try {
+            const container = getChatContainer();
+            if (container) {
+                // 从后往前找，找最近的一个纯文字气泡
+                const children = Array.from(container.children);
+                let templateNode = null;
+
+                for (let i = children.length - 1; i >= 0; i--) {
+                    const node = children[i];
+                    
+                    // 1. 过滤掉带多媒体或特殊标签的节点
+                    if (node.querySelector('img, svg, video, audio, canvas')) continue;
+                    
+                    // 2. 过滤掉高度可能异常或内容为空的节点
+                    if (!node.textContent.trim()) continue;
+                    
+                    // 3. 尽量匹配“对方（in）”的气泡。通常 class 里会有 in, left, receive 等关键字
+                    const className = (node.className || '').toLowerCase();
+                    const isInMsg = className.includes('in') || className.includes('left') || className.includes('receive');
+                    
+                    // 如果找不到带明确方向的，退而求其次，只要是个纯文字气泡就行
+                    if (isInMsg || children.length === 1) {
+                        templateNode = node;
+                        break;
+                    }
+                }
+
+                if (templateNode) {
+                    const clone = templateNode.cloneNode(true);
+                    
+                    // 清理克隆节点上可能绑定的旧 ID 或其他干扰属性
+                    clone.removeAttribute('id');
+                    clone.removeAttribute('data-id');
+                    
+                    // 替换文本内容（为了确保不破坏内部结构，直接替换其 innerText 或最深层文本）
+                    // 因为过滤了 img 等，这里直接用 textContent 最安全
+                    clone.textContent = text; 
+                    
+                    // 清除可能存在的原有动画 class 防止不显示
+                    clone.classList.remove('animating', 'fade-in');
+                    
+                    container.appendChild(clone);
+                    
+                    if (typeof window.scrollToBottom === 'function') {
+                        window.scrollToBottom();
+                    } else {
+                        container.scrollTop = container.scrollHeight;
+                    }
+                    console.log('[sendAuditCard] 第二层 DOM 克隆渲染成功');
+                    return;
+                }
+            }
+        } catch (err) {
+            console.warn('[sendAuditCard] 第二层 DOM 克隆失败，降级至原生手搓', err);
+        }
+
+        /* ----------------------------------------------------
+         * 第三层：原生手搓法 (动态提取颜色变量)
+         * ---------------------------------------------------- */
+        try {
+            const container = getChatContainer() || document.body;
+            
+            // 动态提取颜色的逻辑
+            let bgColor = ''; 
+            let textColor = '';
+            
+            // 方案 A：尝试读取 CSS 变量
+            const rootStyle = getComputedStyle(document.documentElement);
+            const bodyStyle = getComputedStyle(document.body);
+            
+            // 尝试各种可能的变量名
+            const bgVar = rootStyle.getPropertyValue('--msg-bg') || 
+                          rootStyle.getPropertyValue('--chat-msg-bg') ||
+                          bodyStyle.getPropertyValue('--msg-bg');
+            
+            if (bgVar && bgVar.trim()) {
+                bgColor = bgVar.trim();
+            }
+
+            // 方案 B：如果变量没找到，直接去偷一个现有气泡的样式
+            if (!bgColor) {
+                const existingBubble = container.querySelector('.left, .in, .receive, [class*="msg"]');
+                if (existingBubble) {
+                    const bubbleStyle = getComputedStyle(existingBubble);
+                    bgColor = bubbleStyle.backgroundColor;
+                    textColor = bubbleStyle.color;
+                }
+            }
+
+            // 如果还是找不到，给一个符合微信风格的浅灰/白色兜底
+            if (!bgColor || bgColor === 'rgba(0, 0, 0, 0)') {
+                bgColor = '#ffffff'; // 微信气泡通常是纯白
+            }
+            if (!textColor) {
+                textColor = '#333333';
+            }
+
+            // 手搓气泡
+            const bubble = document.createElement('div');
+            bubble.style.cssText = `
+                max-width: 75%;
+                margin: 12px auto 12px 16px; /* 靠左显示 */
+                padding: 10px 14px;
+                border-radius: 8px;
+                background-color: ${bgColor};
+                color: ${textColor};
+                font-size: 15px;
+                line-height: 1.5;
+                word-break: break-all;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                position: relative;
+            `;
+            bubble.textContent = text;
+
+            container.appendChild(bubble);
+            
+            if (typeof window.scrollToBottom === 'function') {
+                window.scrollToBottom();
+            } else {
+                container.scrollTop = container.scrollHeight;
+            }
+            console.log('[sendAuditCard] 第三层原生手搓渲染成功');
+        } catch (err) {
+            console.error('[sendAuditCard] 第三层原生手搓依然失败，可能页面结构发生巨变', err);
+        }
+
+    } catch (globalError) {
+        console.error('[sendAuditCard] 静默发送发生致命错误:', globalError);
+    }
+};
+  // 手动补全：处理面板里的【发送】按钮
+  function sendCardToChat(cid) {
+    safe(function () {
+      var f = findCard(cid); if (!f) { toast('不存在'); return; } var text = f.card.text; if (!text) { toast('为空'); return; }
+      // 调用我们刚刚写入的终极发送引擎
+      if (typeof window.sendAuditCard === 'function') {
+          window.sendAuditCard(text);
+          toast('已发送');
+      } else {
+          toast('发送引擎未加载');
+      }
+    }, 'sendCardToChat');
+  }
+
+  // 手动补全：处理梦角后台自动发送
+  function autoSendCard() {
+    safe(function () {
+      if (!DB || !DB.groups) return; var validCards = [];
+      try { for (var i = 0; i < DB.groups.length; i++) { var g = DB.groups[i]; if (g.disabledBy && g.disabledBy.length > 0) continue; for (var j = 0; j < g.cards.length; j++) { var c = g.cards[j]; if (c.disabledBy && c.disabledBy.length > 0) continue; if (c.text && c.text.trim()) validCards.push(c.text.trim()); } } } catch (e) { return; }
+      if (validCards.length === 0) return; var randomText = validCards[Math.floor(Math.random() * validCards.length)];
+      
+      // 调用我们刚刚写入的终极发送引擎
+      if (typeof window.sendAuditCard === 'function') {
+          window.sendAuditCard(randomText); 
+          console.log('[审计] 梦角自动发送成功：', randomText);
+      }
+    }, 'autoSendCard');
+  }
