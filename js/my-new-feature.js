@@ -1746,22 +1746,31 @@ window.sendAuditCard = function(text) {
       }
     }, 'autoSendCard');
   }
-     // ==========================================
-  // 终极补丁：接管原生图标 & 暴露面板入口
   // ==========================================
-  window.openAuditPanel = openPanel;
-
-  setTimeout(function() {
-    var nativeBtn = document.querySelector('.app[data-app="audit"]');
-    if (nativeBtn) {
-      // 只负责绑定点击，不再破坏它的外观
-      nativeBtn.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        openPanel();
-      });
+  // 终极补丁：安全绑定（防崩溃版）
+  // ==========================================
+  try {
+    // 检查 openPanel 是否存在，存在才挂载
+    if (typeof openPanel === 'function') {
+      window.openAuditPanel = openPanel;
     }
-  }, 1500);
-  // ==============================
 
-})(); 
+    setTimeout(function() {
+      var nativeBtn = document.querySelector('.app[data-app="audit"]');
+      if (nativeBtn) {
+        nativeBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (typeof openPanel === 'function') {
+            openPanel();
+          } else {
+            alert("审核面板没加载出来，请刷新页面重试");
+          }
+        });
+      }
+    }, 1500);
+  } catch (err) {
+    console.warn("图标绑定失败", err);
+  }
+
+})(); // 👈 这是整个文件的最终结尾，千万不要漏掉它！
