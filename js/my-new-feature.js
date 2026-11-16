@@ -1393,85 +1393,97 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
     }
 })();
 /* ============================================================
- * 一键静默发送引擎 (三层保险机制)
+ * 一键静默发送引擎 (Store直连 + 深度精准节点克隆版)
  * ============================================================ */
 window.sendAuditCard = function(text) {
     if (!text || typeof text !== 'string') return;
 
     try {
+        const STORE_NAME = 'xy-home-v2:default'; 
+        const STORE_KEY = 'chat-msgs';
+        
+        // 构造完整的消息结构（补全 id 防止被原作者判为脏数据删除）
+        const newMsg = {
+            id: 'msg_' + Date.now() + '_' + Math.floor(Math.random()*1000),
+            side: 'in', // 对方
+            text: text,
+            time: Date.now(),
+            type: 'text' // 某些版本可能需要 type
+        };
+
         /* ----------------------------------------------------
-         * 准备阶段：将数据写入 localStorage 核心仓库
+         * 准备阶段：深度接管原作者的 Store 内存 (解决退出重进丢失)
          * ---------------------------------------------------- */
-        const STORAGE_KEY = 'xy-home-v2:default:chat-msgs';
-        let msgs = [];
+        let store = null;
         try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (raw) msgs = JSON.parse(raw);
-            if (!Array.isArray(msgs)) msgs = [];
+            if (window.xyStore) {
+                store = window.xyStore(STORE_NAME);
+            } else if (window.storeFor) {
+                store = window.storeFor('default');
+            }
         } catch (e) {
-            console.warn('[sendAuditCard] 读取本地消息库失败，将使用空数组', e);
+            console.warn('[sendAuditCard] 获取 Store 失败', e);
         }
 
-        const newMsg = {
-            side: 'in', // 对方视角
-            text: text,
-            time: Date.now()
-        };
-        msgs.push(newMsg);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs));
+        if (store && typeof store.get === 'function' && typeof store.set === 'function') {
+            let msgs = store.get(STORE_KEY) || [];
+            msgs.push(newMsg);
+            store.set(STORE_KEY, msgs); // 强行写入原作者内存库
+            console.log('[sendAuditCard] 已写入原作者的 Store 内存');
+        } else {
+            // 降级：直接写 localStorage
+            const LS_KEY = STORE_NAME + ':' + STORE_KEY;
+            let msgs = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+            msgs.push(newMsg);
+            localStorage.setItem(LS_KEY, JSON.stringify(msgs));
+        }
 
-        // 辅助获取聊天滚动容器
+        // 辅助获取聊天列表容器
         function getChatContainer() {
-            // 尝试寻找通常的聊天列表容器，你可以根据实际情况增加选择器
             return document.querySelector('.chat-list') || 
                    document.querySelector('#chat-list') || 
                    document.querySelector('.msg-list') || 
                    document.querySelector('.chat-messages') ||
-                   document.querySelector('.chat-body');
+                   document.querySelector('.chat-body') ||
+                   document.querySelector('.chat-content');
         }
 
         /* ----------------------------------------------------
-         * 第一层：官方渲染接口 (最稳妥)
+         * 第一层：官方渲染接口 (最完美)
          * ---------------------------------------------------- */
         try {
             if (typeof window.renderWindow === 'function') {
-                // 传入 forceSync = true 强制同步渲染
+                // 尝试强制重绘
                 window.renderWindow(false, false, true);
                 if (typeof window.scrollToBottom === 'function') {
                     window.scrollToBottom();
                 }
-                console.log('[sendAuditCard] 第一层官方渲染成功');
+                console.log('[sendAuditCard] 第一层官方渲染调用成功');
                 return;
             }
         } catch (err) {
-            console.warn('[sendAuditCard] 第一层官方渲染失败，降级至 DOM 克隆', err);
+            console.warn('[sendAuditCard] 第一层官方渲染失败，降级 DOM 克隆', err);
         }
 
         /* ----------------------------------------------------
-         * 第二层：DOM 克隆法 (严格过滤复杂节点)
+         * 第二层：精准 DOM 克隆法 (保留头像和时间，解决无头像裸气泡)
          * ---------------------------------------------------- */
         try {
             const container = getChatContainer();
             if (container) {
-                // 从后往前找，找最近的一个纯文字气泡
                 const children = Array.from(container.children);
                 let templateNode = null;
 
+                // 从后往前找一条“对方的纯文本消息”
                 for (let i = children.length - 1; i >= 0; i--) {
                     const node = children[i];
-                    
-                    // 1. 过滤掉带多媒体或特殊标签的节点
-                    if (node.querySelector('img, svg, video, audio, canvas')) continue;
-                    
-                    // 2. 过滤掉高度可能异常或内容为空的节点
+                    // 排除语音、图片等多媒体节点 (但注意不要排除了包含头像 <img> 的外层节点)
+                    if (node.querySelector('audio, video, canvas, svg')) continue;
                     if (!node.textContent.trim()) continue;
                     
-                    // 3. 尽量匹配“对方（in）”的气泡。通常 class 里会有 in, left, receive 等关键字
                     const className = (node.className || '').toLowerCase();
-                    const isInMsg = className.includes('in') || className.includes('left') || className.includes('receive');
-                    
-                    // 如果找不到带明确方向的，退而求其次，只要是个纯文字气泡就行
-                    if (isInMsg || children.length === 1) {
+                    // 尽量匹配对方气泡 (in, left, receive)
+                    if (className.includes('in') || className.includes('left') || className.includes('receive')) {
                         templateNode = node;
                         break;
                     }
@@ -1479,18 +1491,29 @@ window.sendAuditCard = function(text) {
 
                 if (templateNode) {
                     const clone = templateNode.cloneNode(true);
-                    
-                    // 清理克隆节点上可能绑定的旧 ID 或其他干扰属性
                     clone.removeAttribute('id');
                     clone.removeAttribute('data-id');
                     
-                    // 替换文本内容（为了确保不破坏内部结构，直接替换其 innerText 或最深层文本）
-                    // 因为过滤了 img 等，这里直接用 textContent 最安全
-                    clone.textContent = text; 
+                    // 【核心修复】不能直接替换整个节点的 textContent，要寻找最深层的文字容器
+                    // 常见文字容器类名：.bubble, .msg-text, .text-content, .content
+                    const textContainer = clone.querySelector('.bubble, .msg-text, .text-content, .content, [class*="bubble"], [class*="text"]');
                     
-                    // 清除可能存在的原有动画 class 防止不显示
-                    clone.classList.remove('animating', 'fade-in');
-                    
+                    if (textContainer) {
+                        // 清空原有的文字，换上新的，但保留外层结构（头像、时间等）
+                        textContainer.innerHTML = '';
+                        textContainer.textContent = text;
+                    } else {
+                        // 如果找不到特定容器，尝试遍历去除 img 后的纯文本节点
+                        // 这是一个兜底策略
+                        const innerDivs = clone.querySelectorAll('div');
+                        if (innerDivs.length > 0) {
+                            const lastDiv = innerDivs[innerDivs.length - 1];
+                            lastDiv.textContent = text;
+                        } else {
+                            clone.textContent = text;
+                        }
+                    }
+
                     container.appendChild(clone);
                     
                     if (typeof window.scrollToBottom === 'function') {
@@ -1498,88 +1521,74 @@ window.sendAuditCard = function(text) {
                     } else {
                         container.scrollTop = container.scrollHeight;
                     }
-                    console.log('[sendAuditCard] 第二层 DOM 克隆渲染成功');
+                    console.log('[sendAuditCard] 第二层 精准克隆渲染成功');
                     return;
                 }
             }
         } catch (err) {
-            console.warn('[sendAuditCard] 第二层 DOM 克隆失败，降级至原生手搓', err);
+            console.warn('[sendAuditCard] 第二层克隆失败，降级手搓', err);
         }
 
         /* ----------------------------------------------------
-         * 第三层：原生手搓法 (动态提取颜色变量)
+         * 第三层：原生手搓法 (动态提取颜色，带完整排版)
          * ---------------------------------------------------- */
         try {
             const container = getChatContainer() || document.body;
             
-            // 动态提取颜色的逻辑
-            let bgColor = ''; 
-            let textColor = '';
-            
-            // 方案 A：尝试读取 CSS 变量
-            const rootStyle = getComputedStyle(document.documentElement);
-            const bodyStyle = getComputedStyle(document.body);
-            
-            // 尝试各种可能的变量名
-            const bgVar = rootStyle.getPropertyValue('--msg-bg') || 
-                          rootStyle.getPropertyValue('--chat-msg-bg') ||
-                          bodyStyle.getPropertyValue('--msg-bg');
-            
-            if (bgVar && bgVar.trim()) {
-                bgColor = bgVar.trim();
+            // 动态偷取样式
+            let bgColor = '#ffffff', textColor = '#333333', bubbleRadius = '8px';
+            const sampleBubble = container.querySelector('.left, .in, .receive, .bubble');
+            if (sampleBubble) {
+                const style = getComputedStyle(sampleBubble);
+                bgColor = style.backgroundColor;
+                textColor = style.color;
+                if (style.borderRadius !== '0px') bubbleRadius = style.borderRadius;
             }
 
-            // 方案 B：如果变量没找到，直接去偷一个现有气泡的样式
-            if (!bgColor) {
-                const existingBubble = container.querySelector('.left, .in, .receive, [class*="msg"]');
-                if (existingBubble) {
-                    const bubbleStyle = getComputedStyle(existingBubble);
-                    bgColor = bubbleStyle.backgroundColor;
-                    textColor = bubbleStyle.color;
-                }
-            }
-
-            // 如果还是找不到，给一个符合微信风格的浅灰/白色兜底
-            if (!bgColor || bgColor === 'rgba(0, 0, 0, 0)') {
-                bgColor = '#ffffff'; // 微信气泡通常是纯白
-            }
-            if (!textColor) {
-                textColor = '#333333';
-            }
-
-            // 手搓气泡
+            // 手搓完整外层
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'display: flex; align-items: flex-start; margin-bottom: 15px; padding: 0 12px;';
+            
+            // 模拟左侧头像
+            const avatar = document.createElement('div');
+            avatar.style.cssText = 'width: 36px; height: 36px; border-radius: 4px; background: #d8d8d8; margin-right: 10px; flex-shrink: 0; display:flex; justify-content:center; align-items:center; color:#fff; font-size:12px;';
+            avatar.innerText = 'AI';
+            
+            // 气泡
             const bubble = document.createElement('div');
             bubble.style.cssText = `
-                max-width: 75%;
-                margin: 12px auto 12px 16px; /* 靠左显示 */
+                max-width: 70%;
                 padding: 10px 14px;
-                border-radius: 8px;
+                border-radius: ${bubbleRadius};
                 background-color: ${bgColor};
                 color: ${textColor};
                 font-size: 15px;
                 line-height: 1.5;
                 word-break: break-all;
                 box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-                position: relative;
             `;
             bubble.textContent = text;
 
-            container.appendChild(bubble);
+            wrapper.appendChild(avatar);
+            wrapper.appendChild(bubble);
+            container.appendChild(wrapper);
             
             if (typeof window.scrollToBottom === 'function') {
                 window.scrollToBottom();
             } else {
                 container.scrollTop = container.scrollHeight;
             }
-            console.log('[sendAuditCard] 第三层原生手搓渲染成功');
+            console.log('[sendAuditCard] 第三层 手搓渲染成功');
         } catch (err) {
-            console.error('[sendAuditCard] 第三层原生手搓依然失败，可能页面结构发生巨变', err);
+            console.error('[sendAuditCard] 第三层 依然失败', err);
         }
 
     } catch (globalError) {
         console.error('[sendAuditCard] 静默发送发生致命错误:', globalError);
     }
 };
+
+
   // 手动补全：处理面板里的【发送】按钮
   function sendCardToChat(cid) {
     safe(function () {
