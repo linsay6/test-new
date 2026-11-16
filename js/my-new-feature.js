@@ -916,12 +916,7 @@
 
 })();
 /* ============================================================
- * 审核报告字卡 · 第三个 Tab
- * 独立文件：my-new-feature.js
- * 依赖：index.html 中的
- *   <button class="cc-tab" data-ccsel="audit">审核报告字卡</button>
- *   <div class="cc-sect-body" id="cc-sect-audit" hidden></div>
- * 数据：localStorage['my-audit-cards'] = { groups: { 分类: [{text}, ...] } }
+ * 审核报告字卡 · 第三个 Tab (强化解析版)
  * ============================================================ */
 (function () {
     'use strict';
@@ -930,13 +925,12 @@
     const AUDIT_SECT_ID = 'cc-sect-audit';
     const STORAGE_KEY   = 'my-audit-cards';
 
-    /* ---------------- 样式（只注入一次） ---------------- */
+    /* ---------------- 样式注入 ---------------- */
     function injectStyle() {
         if (document.getElementById('my-audit-style')) return;
         const style = document.createElement('style');
         style.id = 'my-audit-style';
         style.textContent = `
-/* 让 hidden 属性在所有情况下都生效，避免和原作者 display 样式打架 */
 .cc-sect-body[hidden] { display: none !important; }
 
 .my-audit-wrap {
@@ -970,7 +964,8 @@
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 10px;
 }
-.my-audit-card {
+/* 复用 chat-item 类名，并加上兜底样式 */
+.chat-item.my-audit-card {
     background: #fff;
     border: 1px solid #e6e8ef;
     border-radius: 10px;
@@ -983,7 +978,7 @@
     box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
     transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
-.my-audit-card:hover {
+.chat-item.my-audit-card:hover {
     border-color: #4f6ef7;
     box-shadow: 0 4px 14px rgba(79, 110, 247, .15);
     transform: translateY(-1px);
@@ -998,25 +993,44 @@
         document.head.appendChild(style);
     }
 
-    /* ---------------- 数据读取与规范化 ---------------- */
+    /* ---------------- 数据读取与规范化 (增强版) ---------------- */
     function loadAuditGroups() {
         try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (!raw) return {};
-            const obj = JSON.parse(raw);
+            let raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) {
+                console.warn('[my-audit] localStorage 中没有找到 "' + STORAGE_KEY + '" 的值！');
+                return {};
+            }
+            
+            let obj = JSON.parse(raw);
+            
+            // 处理可能存在的双重 JSON 序列化 (即数据被 stringify 了两次)
+            if (typeof obj === 'string') {
+                try { obj = JSON.parse(obj); } catch(e){}
+            }
+            
             if (!obj || typeof obj !== 'object') return {};
-            if (obj.groups && typeof obj.groups === 'object') return obj.groups;
-            // 兼容直接存 {"情话":[...]} 的情况
-            if (!Array.isArray(obj)) return obj;
+            
+            console.log('[my-audit] 成功读取到的数据结构:', obj);
+            
+            // 优先取 groups 字段
+            if (obj.groups && typeof obj.groups === 'object') {
+                return obj.groups;
+            }
+            // 如果没有 groups 字段，但本身就是个对象，直接返回（兼容直接存分类的情况）
+            if (!Array.isArray(obj)) {
+                return obj;
+            }
             return {};
         } catch (e) {
-            console.warn('[my-audit] 解析 my-audit-cards 失败:', e);
+            console.error('[my-audit] 解析 my-audit-cards 失败:', e);
             return {};
         }
     }
 
     function normalizeCards(list) {
         if (!Array.isArray(list)) return [];
+        // 过滤掉格式不正确的、或者 isDisabled 为 true 的卡片
         return list.filter(c =>
             c && typeof c === 'object' &&
             c.isDisabled !== true && c.isDisabled !== 'true'
@@ -1031,7 +1045,7 @@
 
     function renderAudit(container) {
         const groups = loadAuditGroups();
-        let html = '';
+        let html = '<div class="my-audit-wrap">';
         let total = 0;
 
         Object.keys(groups).forEach(name => {
@@ -1045,22 +1059,30 @@
                     '<span class="my-audit-count">' + cards.length + '</span>' +
                     '</div>';
             html += '  <div class="my-audit-cards">';
+            
             cards.forEach(card => {
                 const text = card.text != null ? card.text
                            : card.content != null ? card.content
                            : card.title != null ? card.title
                            : '';
-                html += '<div class="my-audit-card">' + escapeHtml(text) + '</div>';
+                // 加入 chat-item 类名复用原作者样式
+                html += '<div class="chat-item my-audit-card">' + escapeHtml(text) + '</div>';
             });
+            
             html += '  </div>';
             html += '</div>';
         });
 
-        if (!total) html = '<div class="my-audit-empty">暂无审核报告字卡</div>';
-        container.innerHTML = '<div class="my-audit-wrap">' + html + '</div>';
+        if (!total) {
+            html = '<div class="my-audit-empty">暂无审核报告字卡<br><span style="font-size:12px;color:#aaa;">(请按 F12 查看控制台是否有数据输出)</span></div>';
+        } else {
+            html += '</div>';
+        }
+        
+        container.innerHTML = html;
     }
 
-    /* ---------------- Tab 切换 ---------------- */
+    /* ---------------- Tab 切换逻辑 ---------------- */
     function activateAudit(auditBtn) {
         const sect = document.getElementById(AUDIT_SECT_ID);
         if (!sect) return;
@@ -1069,13 +1091,14 @@
         document.querySelectorAll('.cc-tab').forEach(btn => {
             if (btn === auditBtn) {
                 btn.classList.add('sel');
+                btn.style.display = ''; // 确保自己显示
             } else {
+                btn.classList.remove('sel');
                 if (btn.style.display !== 'none') {
                     // 记录原始 display，恢复时还原
                     btn.dataset.myAuditPrevDisplay = btn.style.display || '';
                 }
                 btn.style.display = 'none';
-                btn.classList.remove('sel');
             }
         });
 
@@ -1083,10 +1106,12 @@
         document.querySelectorAll('.cc-sect-body').forEach(s => {
             if (s === sect) return;
             s.hidden = true;
+            s.style.display = 'none'; // 防原作者用 display 控制
         });
         sect.hidden = false;
+        sect.style.display = ''; // 恢复显示
 
-        // 3. 渲染
+        // 3. 渲染数据
         renderAudit(sect);
     }
 
@@ -1103,22 +1128,23 @@
         const auditBtn = document.querySelector(AUDIT_BTN_SEL);
         if (auditBtn) auditBtn.classList.remove('sel');
 
-        // 隐藏 audit 容器（其余容器由原作者逻辑负责显示）
+        // 隐藏 audit 容器
         const sect = document.getElementById(AUDIT_SECT_ID);
-        if (sect) sect.hidden = true;
+        if (sect) {
+            sect.hidden = true;
+            sect.style.display = 'none';
+        }
     }
 
-    /* ---------------- 事件委托（点击任意 .cc-tab） ---------------- */
+    /* ---------------- 事件监听 ---------------- */
     function onClick(e) {
         const btn = e.target && e.target.closest && e.target.closest('.cc-tab');
         if (!btn) return;
 
         if (btn.matches(AUDIT_BTN_SEL)) {
-            // 点击 audit：走我们的逻辑
             activateAudit(btn);
         } else {
-            // 点击 own / public：交还原作者，我们只负责收尾
-            deactivateAudit();
+            deactivateAudit(); // 点击原作者按钮时收尾
         }
     }
 
@@ -1127,7 +1153,7 @@
         document.addEventListener('click', onClick, false);
     }
 
-    /* 暴露一个重置方法，供外部（如抽屉每次打开时）调用 */
+    // 暴露重置方法备用
     window.myAuditReset = deactivateAudit;
 
     if (document.readyState === 'loading') {
