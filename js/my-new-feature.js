@@ -1746,3 +1746,5 @@ window.sendAuditCard = function(text) {
       }
     }, 'autoSendCard');
   }
+// 将面板打开函数暴露给全局，供原生图标调用
+window.openAuditPanel = openPanel;
