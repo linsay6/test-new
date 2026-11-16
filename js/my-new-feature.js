@@ -1746,7 +1746,7 @@ window.sendAuditCard = function(text) {
       }
     }, 'autoSendCard');
   }
-   // ==========================================
+     // ==========================================
   // 终极补丁：接管原生图标 & 暴露面板入口
   // ==========================================
   window.openAuditPanel = openPanel;
@@ -1754,28 +1754,14 @@ window.sendAuditCard = function(text) {
   setTimeout(function() {
     var nativeBtn = document.querySelector('.app[data-app="audit"]');
     if (nativeBtn) {
-      // 1. 强行绑定点击事件，无视原网页框架的拦截
+      // 只负责绑定点击，不再破坏它的外观
       nativeBtn.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
         openPanel();
       });
-
-      // 2. 强行美化对齐（防止文字偏上）
-      var icoBox = nativeBtn.querySelector('.app-ico');
-      if (icoBox) {
-        icoBox.style.display = 'flex';
-        icoBox.style.alignItems = 'center';
-        icoBox.style.justifyContent = 'center';
-        icoBox.style.fontSize = '20px';
-        icoBox.style.fontWeight = 'bold';
-        icoBox.style.color = '#111'; // 和原图标颜色一致
-        
-        // 把里面的 svg 删掉，改成纯文字，保证不会错位
-        icoBox.innerHTML = '审';
-      }
     }
-  }, 1500); // 等1.5秒确保原网页渲染完毕
+  }, 1500);
   // ==============================
 
-})(); // 
+})(); 
