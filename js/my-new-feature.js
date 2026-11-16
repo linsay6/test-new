@@ -1393,198 +1393,124 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
     }
 })();
 /* ============================================================
- * 一键静默发送引擎 (Store直连 + 深度精准节点克隆版)
+ * 一键静默发送引擎 (Store深度同步 + 样式偷取高仿版)
  * ============================================================ */
 window.sendAuditCard = function(text) {
     if (!text || typeof text !== 'string') return;
 
     try {
-        const STORE_NAME = 'xy-home-v2:default'; 
-        const STORE_KEY = 'chat-msgs';
-        
-        // 构造完整的消息结构（补全 id 防止被原作者判为脏数据删除）
-        const newMsg = {
-            id: 'msg_' + Date.now() + '_' + Math.floor(Math.random()*1000),
-            side: 'in', // 对方
+        // 【核心修复 1】找到原作者真正的 Store 实例
+        const cid = 'default'; 
+        let store = (window.storeFor && window.storeFor(cid)) || 
+                    (window.xyStore && window.xyStore('xy-home-v2:' + cid));
+
+        // 构造符合原作者严格要求的消息体
+        let newMsg = {
+            side: 'in',
             text: text,
-            time: Date.now(),
-            type: 'text' // 某些版本可能需要 type
+            time: Date.now()
         };
 
-        /* ----------------------------------------------------
-         * 准备阶段：深度接管原作者的 Store 内存 (解决退出重进丢失)
-         * ---------------------------------------------------- */
-        let store = null;
-        try {
-            if (window.xyStore) {
-                store = window.xyStore(STORE_NAME);
-            } else if (window.storeFor) {
-                store = window.storeFor('default');
-            }
-        } catch (e) {
-            console.warn('[sendAuditCard] 获取 Store 失败', e);
-        }
-
+        let msgs = [];
         if (store && typeof store.get === 'function' && typeof store.set === 'function') {
-            let msgs = store.get(STORE_KEY) || [];
+            msgs = store.get('chat-msgs') || [];
+            
+            // 深度克隆上一条对方消息的模板结构，保证不会因为缺字段被清洗
+            if (msgs.length > 0) {
+                let template = msgs.filter(m => m.side === 'in').pop() || msgs[0];
+                if (template) {
+                    newMsg = JSON.parse(JSON.stringify(template)); // 深拷贝
+                    newMsg.text = text;
+                    newMsg.time = Date.now();
+                    if (newMsg.id) newMsg.id = 'msg_' + Date.now() + Math.random().toString(36).slice(2,6);
+                }
+            }
+            
             msgs.push(newMsg);
-            store.set(STORE_KEY, msgs); // 强行写入原作者内存库
-            console.log('[sendAuditCard] 已写入原作者的 Store 内存');
+            store.set('chat-msgs', msgs); // 直接写入内存，解决刷新丢失
         } else {
-            // 降级：直接写 localStorage
-            const LS_KEY = STORE_NAME + ':' + STORE_KEY;
-            let msgs = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+            // 降级方案：直接写 localStorage
+            const LS_KEY = 'xy-home-v2:' + cid + ':chat-msgs';
+            msgs = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+            if (msgs.length > 0) {
+                let template = msgs.filter(m => m.side === 'in').pop() || msgs[0];
+                if (template) {
+                    newMsg = JSON.parse(JSON.stringify(template));
+                    newMsg.text = text;
+                    newMsg.time = Date.now();
+                }
+            }
             msgs.push(newMsg);
             localStorage.setItem(LS_KEY, JSON.stringify(msgs));
         }
 
-        // 辅助获取聊天列表容器
-        function getChatContainer() {
-            return document.querySelector('.chat-list') || 
-                   document.querySelector('#chat-list') || 
-                   document.querySelector('.msg-list') || 
-                   document.querySelector('.chat-messages') ||
-                   document.querySelector('.chat-body') ||
-                   document.querySelector('.chat-content');
+        // 【核心修复 2】调用原作者的渲染接口
+        if (typeof window.renderWindow === 'function') {
+            window.renderWindow(false, false, true);
+            if (typeof window.scrollToBottom === 'function') window.scrollToBottom();
+            return; 
         }
 
-        /* ----------------------------------------------------
-         * 第一层：官方渲染接口 (最完美)
-         * ---------------------------------------------------- */
-        try {
-            if (typeof window.renderWindow === 'function') {
-                // 尝试强制重绘
-                window.renderWindow(false, false, true);
-                if (typeof window.scrollToBottom === 'function') {
-                    window.scrollToBottom();
-                }
-                console.log('[sendAuditCard] 第一层官方渲染调用成功');
-                return;
+        // 【核心修复 3】DOM 高仿组装法（放弃危险的全盘克隆）
+        const container = document.querySelector('.chat-content, .chat-list, .msg-list, #chat-msgs') || document.body;
+        
+        // 偷取样式
+        let bubbleStyle = {
+            backgroundColor: '#ffffff', color: '#333', borderRadius: '8px', 
+            padding: '10px 14px', fontSize: '15px', lineHeight: '1.5'
+        };
+        
+        // 遍历找现有的纯文本气泡（要求：有背景色、没子级元素）
+        const candidates = Array.from(container.querySelectorAll('div, span, p'));
+        for (let i = candidates.length - 1; i >= 0; i--) {
+            const el = candidates[i];
+            const bg = getComputedStyle(el).backgroundColor;
+            if (el.children.length === 0 && el.textContent.trim().length > 0 && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+                const style = getComputedStyle(el);
+                bubbleStyle.backgroundColor = style.backgroundColor;
+                bubbleStyle.color = style.color;
+                bubbleStyle.borderRadius = style.borderRadius;
+                bubbleStyle.padding = style.padding;
+                bubbleStyle.fontSize = style.fontSize;
+                bubbleStyle.lineHeight = style.lineHeight;
+                break;
             }
-        } catch (err) {
-            console.warn('[sendAuditCard] 第一层官方渲染失败，降级 DOM 克隆', err);
         }
 
-        /* ----------------------------------------------------
-         * 第二层：精准 DOM 克隆法 (保留头像和时间，解决无头像裸气泡)
-         * ---------------------------------------------------- */
-        try {
-            const container = getChatContainer();
-            if (container) {
-                const children = Array.from(container.children);
-                let templateNode = null;
-
-                // 从后往前找一条“对方的纯文本消息”
-                for (let i = children.length - 1; i >= 0; i--) {
-                    const node = children[i];
-                    // 排除语音、图片等多媒体节点 (但注意不要排除了包含头像 <img> 的外层节点)
-                    if (node.querySelector('audio, video, canvas, svg')) continue;
-                    if (!node.textContent.trim()) continue;
-                    
-                    const className = (node.className || '').toLowerCase();
-                    // 尽量匹配对方气泡 (in, left, receive)
-                    if (className.includes('in') || className.includes('left') || className.includes('receive')) {
-                        templateNode = node;
-                        break;
-                    }
-                }
-
-                if (templateNode) {
-                    const clone = templateNode.cloneNode(true);
-                    clone.removeAttribute('id');
-                    clone.removeAttribute('data-id');
-                    
-                    // 【核心修复】不能直接替换整个节点的 textContent，要寻找最深层的文字容器
-                    // 常见文字容器类名：.bubble, .msg-text, .text-content, .content
-                    const textContainer = clone.querySelector('.bubble, .msg-text, .text-content, .content, [class*="bubble"], [class*="text"]');
-                    
-                    if (textContainer) {
-                        // 清空原有的文字，换上新的，但保留外层结构（头像、时间等）
-                        textContainer.innerHTML = '';
-                        textContainer.textContent = text;
-                    } else {
-                        // 如果找不到特定容器，尝试遍历去除 img 后的纯文本节点
-                        // 这是一个兜底策略
-                        const innerDivs = clone.querySelectorAll('div');
-                        if (innerDivs.length > 0) {
-                            const lastDiv = innerDivs[innerDivs.length - 1];
-                            lastDiv.textContent = text;
-                        } else {
-                            clone.textContent = text;
-                        }
-                    }
-
-                    container.appendChild(clone);
-                    
-                    if (typeof window.scrollToBottom === 'function') {
-                        window.scrollToBottom();
-                    } else {
-                        container.scrollTop = container.scrollHeight;
-                    }
-                    console.log('[sendAuditCard] 第二层 精准克隆渲染成功');
-                    return;
-                }
-            }
-        } catch (err) {
-            console.warn('[sendAuditCard] 第二层克隆失败，降级手搓', err);
+        // 组装高仿外层
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'display: flex; align-items: flex-start; margin-bottom: 15px; padding: 10px;';
+        
+        // 偷取头像
+        const sampleAvatar = container.querySelector('img');
+        let avatarEl;
+        if (sampleAvatar) {
+            avatarEl = sampleAvatar.cloneNode();
+            avatarEl.style.cssText = 'width: 38px; height: 38px; border-radius: 4px; margin-right: 12px; flex-shrink: 0; object-fit: cover;';
+        } else {
+            avatarEl = document.createElement('div');
+            avatarEl.style.cssText = 'width: 38px; height: 38px; border-radius: 4px; background: #ddd; margin-right: 12px; flex-shrink: 0;';
         }
 
-        /* ----------------------------------------------------
-         * 第三层：原生手搓法 (动态提取颜色，带完整排版)
-         * ---------------------------------------------------- */
-        try {
-            const container = getChatContainer() || document.body;
-            
-            // 动态偷取样式
-            let bgColor = '#ffffff', textColor = '#333333', bubbleRadius = '8px';
-            const sampleBubble = container.querySelector('.left, .in, .receive, .bubble');
-            if (sampleBubble) {
-                const style = getComputedStyle(sampleBubble);
-                bgColor = style.backgroundColor;
-                textColor = style.color;
-                if (style.borderRadius !== '0px') bubbleRadius = style.borderRadius;
-            }
+        // 组装新气泡
+        const bubble = document.createElement('div');
+        Object.assign(bubble.style, bubbleStyle);
+        bubble.textContent = text;
+        bubble.className = 'bubble msg-content'; 
 
-            // 手搓完整外层
-            const wrapper = document.createElement('div');
-            wrapper.style.cssText = 'display: flex; align-items: flex-start; margin-bottom: 15px; padding: 0 12px;';
-            
-            // 模拟左侧头像
-            const avatar = document.createElement('div');
-            avatar.style.cssText = 'width: 36px; height: 36px; border-radius: 4px; background: #d8d8d8; margin-right: 10px; flex-shrink: 0; display:flex; justify-content:center; align-items:center; color:#fff; font-size:12px;';
-            avatar.innerText = 'AI';
-            
-            // 气泡
-            const bubble = document.createElement('div');
-            bubble.style.cssText = `
-                max-width: 70%;
-                padding: 10px 14px;
-                border-radius: ${bubbleRadius};
-                background-color: ${bgColor};
-                color: ${textColor};
-                font-size: 15px;
-                line-height: 1.5;
-                word-break: break-all;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            `;
-            bubble.textContent = text;
+        wrapper.appendChild(avatarEl);
+        wrapper.appendChild(bubble);
+        container.appendChild(wrapper);
 
-            wrapper.appendChild(avatar);
-            wrapper.appendChild(bubble);
-            container.appendChild(wrapper);
-            
-            if (typeof window.scrollToBottom === 'function') {
-                window.scrollToBottom();
-            } else {
-                container.scrollTop = container.scrollHeight;
-            }
-            console.log('[sendAuditCard] 第三层 手搓渲染成功');
-        } catch (err) {
-            console.error('[sendAuditCard] 第三层 依然失败', err);
+        if (typeof window.scrollToBottom === 'function') {
+            window.scrollToBottom();
+        } else {
+            container.scrollTop = container.scrollHeight;
         }
+        console.log('[sendAuditCard] 原生高仿渲染成功');
 
-    } catch (globalError) {
-        console.error('[sendAuditCard] 静默发送发生致命错误:', globalError);
+    } catch (err) {
+        console.error('[sendAuditCard] 发生错误:', err);
     }
 };
 
