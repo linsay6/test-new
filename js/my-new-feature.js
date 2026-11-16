@@ -916,7 +916,7 @@
 
 })();
 /* ============================================================
- * 审核报告字卡 · 第三个 Tab (终极交互同步版)
+ * 审核报告字卡 · 第三个 Tab (悬浮球一比一复刻+双向同步版)
  * ============================================================ */
 (function () {
     'use strict';
@@ -925,109 +925,138 @@
     const AUDIT_SECT_ID = 'cc-sect-audit';
     const STORAGE_KEY   = 'my-audit-cards';
 
-    /* ---------------- 样式注入 ---------------- */
+    /* ---------------- 样式注入 (复刻悬浮球风格) ---------------- */
     function injectStyle() {
         if (document.getElementById('my-audit-style')) return;
         const style = document.createElement('style');
         style.id = 'my-audit-style';
         style.textContent = `
-/* 容器样式 */
+/* 整体容器 */
 .my-audit-wrap {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    padding: 10px 4px;
+    padding: 12px 4px;
     max-height: 100%;
     overflow-y: auto;
     box-sizing: border-box;
+    background: #f7f8fa; /* 悬浮球背景偏灰 */
 }
-/* 分组标题 */
-.my-audit-group-title {
+/* 分组卡片 */
+.my-audit-group {
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+/* 分组头部 */
+.my-audit-group-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 14px;
-    font-weight: 600;
-    color: #333;
-    margin-bottom: 8px;
-    padding: 0 4px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f0f0f0;
+    background: #fafafa;
 }
-.my-audit-group-title .title-left {
+.my-audit-group-title {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #333;
 }
 .my-audit-count {
-    font-size: 11px;
-    font-weight: 500;
-    background: #eef2ff;
-    color: #4f6ef7;
-    padding: 1px 8px;
-    border-radius: 10px;
+    font-size: 12px;
+    color: #999;
+    font-weight: normal;
 }
+/* 分组操作按钮 */
+.my-audit-group-actions {
+    display: flex;
+    gap: 8px;
+    font-size: 12px;
+    color: #666;
+}
+.my-audit-group-actions span {
+    cursor: pointer;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    background: #fff;
+    user-select: none;
+}
+.my-audit-group-actions span:hover {
+    background: #f0f0f0;
+}
+.my-audit-group-actions span.danger {
+    color: #ff4d4f;
+    border-color: #ffcccc;
+}
+.my-audit-group-actions span.danger:hover {
+    background: #fff1f0;
+}
+
 /* 卡片列表 */
 .my-audit-cards {
     display: flex;
     flex-direction: column;
-    gap: 10px;
 }
-/* 卡片本体 */
-.chat-item.my-audit-card {
-    background: #fff;
-    border: 1px solid #e8e8e8;
-    border-radius: 12px;
-    padding: 12px 14px;
-    font-size: 14px;
-    line-height: 1.5;
-    color: #333;
+/* 单个卡片行 */
+.my-audit-card {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-    transition: all .15s ease;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px dashed #f0f0f0;
 }
-.chat-item.my-audit-card.is-disabled .my-audit-text {
-    color: #aaa;
+.my-audit-card:last-child {
+    border-bottom: none;
+}
+.my-audit-card.is-disabled .card-text {
+    color: #ccc;
     text-decoration: line-through;
 }
-/* 卡片底部操作区 */
-.my-audit-actions {
+.card-text {
+    font-size: 14px;
+    color: #333;
+    flex: 1;
+    margin-right: 10px;
+    word-break: break-all;
+}
+/* 卡片操作按钮 */
+.my-audit-card-actions {
     display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    border-top: 1px dashed #f0f0f0;
-    padding-top: 8px;
-    margin-top: 2px;
-}
-.my-audit-act-btn {
+    gap: 6px;
     font-size: 12px;
-    color: #666;
+}
+.my-audit-card-actions span {
     cursor: pointer;
-    padding: 3px 10px;
-    border-radius: 6px;
-    background: #f5f5f5;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid #dcdfe6;
+    color: #606266;
+    background: #fff;
     user-select: none;
-    transition: background .15s;
+    transition: all 0.15s;
 }
-.my-audit-act-btn:hover {
-    background: #e8e8e8;
+.my-audit-card-actions span:hover {
+    background: #f4f4f5;
 }
-.my-audit-act-btn.btn-delete {
+.my-audit-card-actions span.btn-send {
     color: #ff4d4f;
+    border-color: #ffcccc;
     background: #fff1f0;
 }
-.my-audit-act-btn.btn-delete:hover {
-    background: #ffd8d8;
+.my-audit-card-actions span.btn-send:hover {
+    background: #ffe4e4;
 }
-.my-audit-act-btn.btn-dedup-group {
-    font-size: 12px;
-    font-weight: normal;
-    color: #4f6ef7;
-    background: #eef2ff;
-    padding: 4px 10px;
+.my-audit-card-actions span.btn-danger {
+    color: #ff4d4f;
+    border-color: #ffcccc;
 }
-.my-audit-act-btn.btn-dedup-group:hover {
-    background: #dbe4ff;
+.my-audit-card-actions span.btn-danger:hover {
+    background: #fff1f0;
 }
 .my-audit-empty {
     text-align: center;
@@ -1039,175 +1068,194 @@
         document.head.appendChild(style);
     }
 
-    /* ---------------- 数据读取与保存 ---------------- */
-    function getRawData() {
+    /* ---------------- 数据读写 (直连 localStorage) ---------------- */
+    function getStoreData() {
         try {
             let raw = localStorage.getItem(STORAGE_KEY);
-            if (!raw) return { groups: {} };
+            if (!raw) return { version: 1, groups: [] };
             let obj = JSON.parse(raw);
-            if (typeof obj === 'string') {
-                try { obj = JSON.parse(obj); } catch(e){}
-            }
-            return obj || { groups: {} };
+            if (typeof obj === 'string') obj = JSON.parse(obj);
+            if (!obj.groups) obj.groups = [];
+            return obj;
         } catch (e) {
-            console.error('[my-audit] 数据读取失败:', e);
-            return { groups: {} };
+            console.error('数据读取失败', e);
+            return { version: 1, groups: [] };
         }
     }
 
-    function saveRawData(obj) {
+    function saveStoreData(obj) {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
         } catch (e) {
-            console.error('[my-audit] 数据保存失败:', e);
+            console.error('数据保存失败', e);
         }
     }
 
-    function getAuditGroups(obj) {
-        if (!obj) return [];
-        let groups = obj.groups || obj;
-        let result = [];
-
-        if (Array.isArray(groups)) {
-            groups.forEach(g => {
-                if (!g) return;
-                let name = g.name || g.title || g.category || g.groupName || '默认分类';
-                let list = g.cards || g.items || g.list || g.data || g;
-                if (Array.isArray(list)) result.push({ name, list });
-            });
-        } else if (typeof groups === 'object') {
-            Object.keys(groups).forEach(k => {
-                if (Array.isArray(groups[k])) result.push({ name: k, list: groups[k] });
-            });
-        }
-        return result;
-    }
-
-    /* ---------------- 渲染 ---------------- */
+    /* ---------------- 渲染 UI ---------------- */
     const HTML_ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
     function escapeHtml(v) {
         return String(v == null ? '' : v).replace(/[&<>"']/g, ch => HTML_ESC[ch]);
     }
 
-    function renderAudit(container) {
-        const obj = getRawData();
-        const groups = getAuditGroups(obj);
+    function renderUI() {
+        const container = document.getElementById(AUDIT_SECT_ID);
+        if (!container) return;
+
+        const obj = getStoreData();
+        const groups = obj.groups || [];
         
         let html = '<div class="my-audit-wrap">';
-        let total = 0;
 
-        groups.forEach(g => {
-            const cards = g.list.filter(c => c && typeof c === 'object');
-            if (!cards.length) return;
-            total += cards.length;
-
-            html += `<div class="my-audit-group">`;
-            // 标题与一键去重按钮
-            html += `  <div class="my-audit-group-title">`;
-            html += `    <div class="title-left">${escapeHtml(g.name)}<span class="my-audit-count">${cards.length}</span></div>`;
-            html += `    <span class="my-audit-act-btn btn-dedup-group" data-group="${escapeHtml(g.name)}">一键去重</span>`;
-            html += `  </div>`;
-            html += `  <div class="my-audit-cards">`;
-            
-            cards.forEach(card => {
-                const text = card.text || card.content || card.title || '';
-                const isDisabled = card.isDisabled === true || card.isDisabled === 'true';
-                const disabledClass = isDisabled ? 'is-disabled' : '';
+        if (!groups.length) {
+            html += '<div class="my-audit-empty">暂无字卡，去悬浮球里添加吧~</div>';
+        } else {
+            groups.forEach((g, gIdx) => {
+                const name = g.name || g.title || '未命名';
+                const cards = g.cards || g.items || g.list || [];
                 
-                html += `<div class="chat-item my-audit-card ${disabledClass}">`;
-                html += `  <div class="my-audit-text">${escapeHtml(text)}</div>`;
-                html += `  <div class="my-audit-actions">`;
-                html += `    <span class="my-audit-act-btn btn-toggle" data-id="${card.id}" data-group="${escapeHtml(g.name)}">${isDisabled ? '启用' : '禁用'}</span>`;
-                html += `    <span class="my-audit-act-btn btn-delete" data-id="${card.id}" data-group="${escapeHtml(g.name)}">删除</span>`;
+                html += `<div class="my-audit-group">`;
+                // --- 分组头部 ---
+                html += `  <div class="my-audit-group-header">`;
+                html += `    <div class="my-audit-group-title">${escapeHtml(name)} <span class="my-audit-count">(${cards.length})</span></div>`;
+                html += `    <div class="my-audit-group-actions">`;
+                html += `      <span data-action="rename-group" data-gidx="${gIdx}">重命名</span>`;
+                html += `      <span data-action="move-up" data-gidx="${gIdx}">↑</span>`;
+                html += `      <span data-action="move-down" data-gidx="${gIdx}">↓</span>`;
+                html += `      <span data-action="toggle-group" data-gidx="${gIdx}">开关组</span>`;
+                html += `      <span class="danger" data-action="delete-group" data-gidx="${gIdx}">删除</span>`;
+                html += `    </div>`;
+                html += `  </div>`;
+                
+                // --- 卡片列表 ---
+                html += `  <div class="my-audit-cards">`;
+                if (!cards.length) {
+                    html += `<div class="my-audit-empty" style="padding: 15px 0; font-size:12px;">该分类为空</div>`;
+                } else {
+                    cards.forEach((c, cIdx) => {
+                        const text = c.text || c.content || '';
+                        const isDisabled = c.isDisabled === true || c.isDisabled === 'true';
+                        html += `<div class="my-audit-card ${isDisabled ? 'is-disabled' : ''}">`;
+                        html += `  <div class="card-text">${escapeHtml(text)}</div>`;
+                        html += `  <div class="my-audit-card-actions">`;
+                        html += `    <span class="btn-send" data-action="send-card" data-gidx="${gIdx}" data-cidx="${cIdx}">发送</span>`;
+                        html += `    <span data-action="edit-card" data-gidx="${gIdx}" data-cidx="${cIdx}">编辑</span>`;
+                        html += `    <span data-action="toggle-card" data-gidx="${gIdx}" data-cidx="${cIdx}">${isDisabled ? '启用' : '禁用'}</span>`;
+                        html += `    <span class="btn-danger" data-action="delete-card" data-gidx="${gIdx}" data-cidx="${cIdx}">删除</span>`;
+                        html += `  </div>`;
+                        html += `</div>`;
+                    });
+                }
                 html += `  </div>`;
                 html += `</div>`;
             });
-            
-            html += `  </div>`;
-            html += `</div>`;
-        });
-
-        if (!total) {
-            html = '<div class="my-audit-empty">暂无审核报告字卡</div>';
-        } else {
-            html += '</div>';
         }
         
+        html += '</div>';
         container.innerHTML = html;
     }
 
-    /* ---------------- 卡片操作事件（编辑、删除、去重） ---------------- */
-    function bindCardActions(container) {
+    /* ---------------- 交互逻辑中心 ---------------- */
+    function bindEvents() {
+        const container = document.getElementById(AUDIT_SECT_ID);
+        if (!container) return;
+
+        // 使用事件委托处理所有按钮点击
         container.addEventListener('click', function(e) {
-            const target = e.target;
-            if (!target.classList.contains('my-audit-act-btn')) return;
-            
+            const target = e.target.closest('span[data-action]');
+            if (!target) return;
+
             e.preventDefault();
-            e.stopPropagation(); // 阻止冒泡防止干扰原作者的点击
+            e.stopPropagation();
 
-            const groupName = target.dataset.group;
-            const isDedup = target.classList.contains('btn-dedup-group');
-            const isToggle = target.classList.contains('btn-toggle');
-            const isDelete = target.classList.contains('btn-delete');
-            const id = target.dataset.id;
+            const action = target.dataset.action;
+            const gIdx = parseInt(target.dataset.gidx, 10);
+            const cIdx = parseInt(target.dataset.cidx, 10);
             
-            const obj = getRawData();
-            
-            // 辅助函数：获取组内的列表
-            const getList = (gName) => {
-                if (Array.isArray(obj.groups)) {
-                    const g = obj.groups.find(x => (x.name || x.title) === gName);
-                    return g ? (g.cards || g.items || g.list) : null;
-                } else if (typeof obj.groups === 'object') {
-                    return obj.groups[gName];
-                } else if (typeof obj === 'object') {
-                    return obj[gName];
+            let obj = getStoreData();
+            let groups = obj.groups;
+            let changed = false;
+
+            // 1. 分组操作
+            if (action === 'rename-group') {
+                const newName = prompt('输入新的分类名称：', groups[gIdx].name);
+                if (newName && newName.trim()) {
+                    groups[gIdx].name = newName.trim();
+                    changed = true;
                 }
-                return null;
-            };
-
-            const list = getList(groupName);
-            if (!list) return;
-
-            let modified = false;
-
-            if (isDedup) {
-                // 一键去重
-                const seen = new Set();
-                const newList = list.filter(c => {
-                    const t = c.text || c.content || '';
-                    if (seen.has(t)) return false;
-                    seen.add(t);
-                    return true;
-                });
-                if (newList.length !== list.length) {
-                    list.length = 0;
-                    list.push(...newList);
-                    modified = true;
-                } else {
-                    alert('该分类下没有重复字卡');
+            } 
+            else if (action === 'move-up' && gIdx > 0) {
+                [groups[gIdx - 1], groups[gIdx]] = [groups[gIdx], groups[gIdx - 1]];
+                changed = true;
+            }
+            else if (action === 'move-down' && gIdx < groups.length - 1) {
+                [groups[gIdx + 1], groups[gIdx]] = [groups[gIdx], groups[gIdx + 1]];
+                changed = true;
+            }
+            else if (action === 'toggle-group') {
+                // 如果组里有卡片，把第一张的状态反转，应用到全组
+                const cards = groups[gIdx].cards || groups[gIdx].items || groups[gIdx].list || [];
+                if (cards.length > 0) {
+                    const firstDisabled = cards[0].isDisabled === true;
+                    cards.forEach(c => c.isDisabled = !firstDisabled);
+                    changed = true;
                 }
-            } else {
-                const idx = list.findIndex(c => c.id === id);
-                if (idx !== -1) {
-                    if (isToggle) {
-                        list[idx].isDisabled = !(list[idx].isDisabled === true || list[idx].isDisabled === 'true');
-                        modified = true;
-                    } else if (isDelete) {
-                        list.splice(idx, 1);
-                        modified = true;
-                    }
+            }
+            else if (action === 'delete-group') {
+                if (confirm(`确定要删除【${groups[gIdx].name}】及其下的所有卡片吗？`)) {
+                    groups.splice(gIdx, 1);
+                    changed = true;
                 }
             }
             
-            if (modified) {
-                saveRawData(obj);
-                renderAudit(container); // 重新渲染当前列表
+            // 2. 卡片操作
+            else {
+                const cards = groups[gIdx].cards || groups[gIdx].items || groups[gIdx].list || [];
+                const card = cards[cIdx];
+                if (!card) return;
+
+                if (action === 'send-card') {
+                    // 尝试将内容填入聊天输入框
+                    const text = card.text || card.content || '';
+                    const chatInput = document.querySelector('textarea') || document.querySelector('input[type="text"]');
+                    if (chatInput) {
+                        chatInput.value = text;
+                        chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+                        // 尝试点击发送按钮
+                        const sendBtn = document.querySelector('.send-btn, .btn-send, [class*="send"]');
+                        if (sendBtn) sendBtn.click();
+                    } else {
+                        alert('已复制到剪贴板，请手动粘贴发送：\\n' + text);
+                        navigator.clipboard.writeText(text);
+                    }
+                }
+                else if (action === 'edit-card') {
+                    const newText = prompt('修改卡片内容：', card.text || card.content || '');
+                    if (newText !== null && newText.trim() !== '') {
+                        card.text = newText.trim();
+                        changed = true;
+                    }
+                }
+                else if (action === 'toggle-card') {
+                    card.isDisabled = !(card.isDisabled === true || card.isDisabled === 'true');
+                    changed = true;
+                }
+                else if (action === 'delete-card') {
+                    if (confirm('确定删除这张卡片吗？')) {
+                        cards.splice(cIdx, 1);
+                        changed = true;
+                    }
+                }
+            }
+
+            // 如果数据有变动，保存并重新渲染
+            if (changed) {
+                saveStoreData(obj);
+                renderUI();
             }
         });
     }
 
-    /* ---------------- Tab 切换逻辑 (只控制 hidden，不干预原作者) ---------------- */
+    /* ---------------- Tab 切换逻辑 ---------------- */
     function activateAudit(auditBtn) {
         const sect = document.getElementById(AUDIT_SECT_ID);
         if (!sect) return;
@@ -1217,7 +1265,6 @@
             else btn.classList.remove('sel');
         });
 
-        // 只通过 hidden 控制显隐，彻底放弃 display: none，让原作者自己的逻辑自己跑
         document.querySelectorAll('.cc-sect-body').forEach(s => {
             if (s === sect) {
                 s.hidden = false;
@@ -1226,7 +1273,8 @@
             }
         });
 
-        renderAudit(sect);
+        // 每次切进这个 Tab，重新读取 localStorage 渲染，保证和悬浮球同步
+        renderUI();
     }
 
     function deactivateAudit() {
@@ -1236,12 +1284,11 @@
         const sect = document.getElementById(AUDIT_SECT_ID);
         if (sect) {
             sect.hidden = true;
-            // 不碰其他人的 hidden 状态，原作者的事件会负责展示自己
         }
     }
 
     /* ---------------- 初始化 ---------------- */
-    function onClick(e) {
+    function onClickTab(e) {
         const btn = e.target && e.target.closest && e.target.closest('.cc-tab');
         if (!btn) return;
 
@@ -1254,12 +1301,8 @@
 
     function init() {
         injectStyle();
-        document.addEventListener('click', onClick, false);
-        
-        const sect = document.getElementById(AUDIT_SECT_ID);
-        if (sect) {
-            bindCardActions(sect);
-        }
+        document.addEventListener('click', onClickTab, false);
+        bindEvents();
     }
 
     if (document.readyState === 'loading') {
