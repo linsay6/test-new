@@ -85,7 +85,7 @@
   function findCard(cid) { try { for (var i = 0; i < DB.groups.length; i++) { var g = DB.groups[i]; for (var j = 0; j < g.cards.length; j++) if (g.cards[j].id === cid) return { group: g, card: g.cards[j] }; } } catch (e) {} return null; }
   function pushHistory(rec) { safe(function () { DB.history.push({ id: uid('h'), sender: rec.sender || SENDER_MJ, action: rec.action || 'add', text: rec.text || '', result: rec.result || 'agree', time: Date.now(), extra: rec.extra || '' }); if (DB.history.length > HISTORY_LIMIT) DB.history = DB.history.slice(-HISTORY_LIMIT); saveData(); }, 'pushHistory'); }
 
-     // 【绝对稳定】气泡注入方案 (坏数据自动洗白版)
+    // 【绝对稳定】气泡注入方案 (坏数据自动洗白 + 实时同步颜色)
   function injectBubbleToChat(text) {
     var renderSuccess = false;
     try {
@@ -102,7 +102,6 @@
             } catch(e) {}
 
             var storeData = null;
-            // --- 尝试从 Store 写入 ---
             if (store && typeof store.get === 'function') {
                 try {
                     storeData = store.get('chat-msgs');
@@ -119,19 +118,15 @@
                 } catch(err) {}
             }
 
-            // --- 尝试从 localStorage 安全追加 ---
             var LS_KEY = 'xy-home-v2:' + cid + ':chat-msgs';
             try {
                 var raw = localStorage.getItem(LS_KEY);
                 var parsed = null;
-                
-                // 【核心修复】拦截坏数据
                 if (raw && raw !== '[object Object]' && raw !== 'undefined' && raw !== 'null') {
                     try { parsed = JSON.parse(raw); } catch(e) { parsed = null; }
                 }
 
                 if (!parsed) {
-                    // 如果原数据坏了或不存在，直接重建干净的数组
                     localStorage.setItem(LS_KEY, JSON.stringify([newMsg]));
                 } else {
                     var lsTarget = null;
@@ -178,6 +173,7 @@
             var allCandidates = chatBody.querySelectorAll('.bubble, [class*="bubble"], [class*="msg-content"], .text');
             for (var bIdx = allCandidates.length - 1; bIdx >= 0; bIdx--) {
                 var b = allCandidates[bIdx];
+                if (b.closest('[data-ma-injected="1"]')) continue; // 绝不能偷自己身上的颜色
                 var cls = (b.className || '').toLowerCase();
                 if (cls.indexOf('out') >= 0 || cls.indexOf('right') >= 0) continue; 
                 var rect = b.getBoundingClientRect();
@@ -235,14 +231,12 @@
     return renderSuccess;
   }
 
+  // 【核心修复】实时监控原生气泡颜色，实现无刷新热更新
   function checkAndRepairChat() {
     var chatBody = document.getElementById('chat-body');
     if (!chatBody || INJECTED_MSGS.length === 0) return;
-    var injectedNodes = chatBody.querySelectorAll('[data-ma-injected="1"]');
-    if (injectedNodes.length === INJECTED_MSGS.length) return;
     
-    for (var i = 0; i < injectedNodes.length; i++) injectedNodes[i].remove();
-    
+    // 1. 提取当前原网页的最新样式
     var bubbleStyle = {
         backgroundColor: '#ffffff', color: '#333333', borderRadius: '8px', 
         padding: '10px 14px', fontSize: '15px', lineHeight: '1.5', 
@@ -252,6 +246,7 @@
     var allCandidates = chatBody.querySelectorAll('.bubble, [class*="bubble"], [class*="msg-content"]');
     for (var bIdx = allCandidates.length - 1; bIdx >= 0; bIdx--) {
         var b = allCandidates[bIdx];
+        if (b.closest('[data-ma-injected="1"]')) continue; // 排除自己的元素
         var cls = (b.className || '').toLowerCase();
         if (cls.indexOf('out') >= 0 || cls.indexOf('right') >= 0) continue;
         var rect = b.getBoundingClientRect();
@@ -265,33 +260,49 @@
         bubbleStyle.borderRadius = s.borderRadius || '8px';
     }
 
-    for (var m = 0; m < INJECTED_MSGS.length; m++) {
-        var msg = INJECTED_MSGS[m];
+    var injectedNodes = chatBody.querySelectorAll('[data-ma-injected="1"]');
+    
+    // 2. 如果节点数量不对，推倒重来
+    if (injectedNodes.length !== INJECTED_MSGS.length) {
+        for (var i = 0; i < injectedNodes.length; i++) injectedNodes[i].remove();
         
-        var wrapper = document.createElement('div');
-        wrapper.setAttribute('data-ma-injected', '1');
-        wrapper.style.cssText = 'display: flex; align-items: flex-start; margin-bottom: 15px; padding: 10px; width: 100%; box-sizing: border-box;';
-        
-        var sampleAvatar = chatBody.querySelector('img');
-        var avatarEl;
-        if (sampleAvatar) {
-            avatarEl = sampleAvatar.cloneNode();
-            avatarEl.style.cssText = 'width: 38px; height: 38px; border-radius: 4px; margin-right: 12px; flex-shrink: 0; object-fit: cover;';
-        } else {
-            avatarEl = document.createElement('div');
-            avatarEl.style.cssText = 'width: 38px; height: 38px; border-radius: 4px; background: #ddd; margin-right: 12px; flex-shrink: 0;';
+        for (var m = 0; m < INJECTED_MSGS.length; m++) {
+            var msg = INJECTED_MSGS[m];
+            var wrapper = document.createElement('div');
+            wrapper.setAttribute('data-ma-injected', '1');
+            wrapper.style.cssText = 'display: flex; align-items: flex-start; margin-bottom: 15px; padding: 10px; width: 100%; box-sizing: border-box;';
+            
+            var sampleAvatar = chatBody.querySelector('img');
+            var avatarEl;
+            if (sampleAvatar) {
+                avatarEl = sampleAvatar.cloneNode();
+                avatarEl.style.cssText = 'width: 38px; height: 38px; border-radius: 4px; margin-right: 12px; flex-shrink: 0; object-fit: cover;';
+            } else {
+                avatarEl = document.createElement('div');
+                avatarEl.style.cssText = 'width: 38px; height: 38px; border-radius: 4px; background: #ddd; margin-right: 12px; flex-shrink: 0;';
+            }
+
+            var bubble = document.createElement('div');
+            Object.assign(bubble.style, bubbleStyle);
+            bubble.textContent = msg.text;
+            bubble.className = 'bubble msg-content'; 
+
+            wrapper.appendChild(avatarEl);
+            wrapper.appendChild(bubble);
+            chatBody.appendChild(wrapper);
         }
-
-        var bubble = document.createElement('div');
-        Object.assign(bubble.style, bubbleStyle);
-        bubble.textContent = msg.text;
-        bubble.className = 'bubble msg-content'; 
-
-        wrapper.appendChild(avatarEl);
-        wrapper.appendChild(bubble);
-        chatBody.appendChild(wrapper);
+        try { chatBody.scrollTop = chatBody.scrollHeight; } catch (e) {}
+    } else {
+        // 3. 【热更新】如果节点都在，但你的主题颜色变了，就把最新颜色“刷”到咱们的旧气泡上
+        for (var i = 0; i < injectedNodes.length; i++) {
+            var bubble = injectedNodes[i].querySelector('.bubble, [class*="msg-content"]');
+            if (bubble) {
+                // 只强行覆盖背景和文字颜色，不动排版
+                bubble.style.backgroundColor = bubbleStyle.backgroundColor;
+                bubble.style.color = bubbleStyle.color;
+            }
+        }
     }
-    try { chatBody.scrollTop = chatBody.scrollHeight; } catch (e) {}
   }
   function autoPendingCount() { var n = 0; try { for (var i = 0; i < DB.pending.length; i++) { var p = DB.pending[i]; if (p.status === 'pending' && p.sender === SENDER_MJ && p.action === 'add') n++; } } catch (e) {} return n; }
   function pendingCount() { var n = 0; try { for (var i = 0; i < DB.pending.length; i++) if (DB.pending[i].status === 'pending') n++; } catch (e) {} return n; }
