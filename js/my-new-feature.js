@@ -916,7 +916,7 @@
 
 })();
 /* ============================================================
- * 审核报告字卡 · 第三个 Tab (完美兼容版)
+ * 审核报告字卡 · 第三个 Tab (终极单列排版修复版)
  * ============================================================ */
 (function () {
     'use strict';
@@ -931,6 +931,7 @@
         const style = document.createElement('style');
         style.id = 'my-audit-style';
         style.textContent = `
+/* 强制让 hidden 生效 */
 .cc-sect-body[hidden] { display: none !important; }
 
 .my-audit-wrap {
@@ -959,29 +960,27 @@
     padding: 1px 8px;
     border-radius: 10px;
 }
+/* 单列列表布局，贴近悬浮球样式 */
 .my-audit-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    display: flex;
+    flex-direction: column;
     gap: 10px;
 }
-/* 复用 chat-item 类名，并加上兜底样式 */
+/* 卡片样式：白底、浅灰边、圆角 */
 .chat-item.my-audit-card {
     background: #fff;
-    border: 1px solid #e6e8ef;
-    border-radius: 10px;
-    padding: 10px 12px;
-    font-size: 13px;
-    line-height: 1.55;
+    border: 1px solid #e8e8e8;
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 14px;
+    line-height: 1.5;
     color: #333;
-    white-space: pre-wrap;
     word-break: break-word;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
-    transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    transition: background .15s ease;
 }
-.chat-item.my-audit-card:hover {
-    border-color: #4f6ef7;
-    box-shadow: 0 4px 14px rgba(79, 110, 247, .15);
-    transform: translateY(-1px);
+.chat-item.my-audit-card:active {
+    background: #f9f9f9;
 }
 .my-audit-empty {
     text-align: center;
@@ -993,24 +992,22 @@
         document.head.appendChild(style);
     }
 
-    /* ---------------- 数据读取与规范化 (解决 Array 问题) ---------------- */
+    /* ---------------- 数据读取与规范化 ---------------- */
     function getAuditGroups() {
         try {
             let raw = localStorage.getItem(STORAGE_KEY);
             if (!raw) return [];
             let obj = JSON.parse(raw);
             
-            // 处理可能存在的双重 JSON 序列化
             if (typeof obj === 'string') {
                 try { obj = JSON.parse(obj); } catch(e){}
             }
             if (!obj) return [];
 
-            let groups = obj.groups || obj; // 优先取 groups，没有则直接用 obj
+            let groups = obj.groups || obj;
             let result = [];
 
             if (Array.isArray(groups)) {
-                // 针对 groups 是数组的情况 (你的截图就是这个情况)
                 groups.forEach(g => {
                     if (!g) return;
                     let name = g.name || g.title || g.category || g.groupName || '默认分类';
@@ -1020,7 +1017,6 @@
                     }
                 });
             } else if (typeof groups === 'object') {
-                // 针对 groups 是对象 {"情话": [...]} 的情况
                 Object.keys(groups).forEach(k => {
                     if (Array.isArray(groups[k])) {
                         result.push({ name: k, list: groups[k] });
@@ -1046,7 +1042,7 @@
         let total = 0;
 
         groups.forEach(g => {
-            // 过滤掉 isDisabled: true 的卡片
+            // 过滤禁用卡片
             const cards = g.list.filter(c => 
                 c && typeof c === 'object' && 
                 c.isDisabled !== true && c.isDisabled !== 'true'
@@ -1076,44 +1072,54 @@
         container.innerHTML = html;
     }
 
-    /* ---------------- Tab 切换逻辑 ---------------- */
+    /* ---------------- Tab 切换逻辑 (完美交接) ---------------- */
     function activateAudit(auditBtn) {
         const sect = document.getElementById(AUDIT_SECT_ID);
         if (!sect) return;
 
-        // 1. 高亮自己，取消其他 Tab 的高亮（保留其他按钮，不隐藏！）
+        // 1. 改变 Tab 高亮
         document.querySelectorAll('.cc-tab').forEach(btn => {
-            if (btn === auditBtn) {
-                btn.classList.add('sel');
-            } else {
-                btn.classList.remove('sel');
-            }
+            if (btn === auditBtn) btn.classList.add('sel');
+            else btn.classList.remove('sel');
         });
 
-        // 2. 隐藏其他页面容器，显示当前页面容器
+        // 2. 隐藏其他容器 (原作者的容器)
         document.querySelectorAll('.cc-sect-body').forEach(s => {
             if (s === sect) return;
             s.hidden = true;
-            s.style.display = 'none';
+            s.style.display = 'none'; // 强制隐藏
         });
+
+        // 3. 显示自己的容器
         sect.hidden = false;
         sect.style.display = '';
 
-        // 3. 渲染数据
+        // 4. 渲染数据
         renderAudit(sect);
     }
 
     function deactivateAudit() {
-        // 去掉自己的高亮
+        // 1. 移除自己的高亮
         const auditBtn = document.querySelector(AUDIT_BTN_SEL);
         if (auditBtn) auditBtn.classList.remove('sel');
 
-        // 隐藏自己的容器
+        // 2. 隐藏自己的容器
         const sect = document.getElementById(AUDIT_SECT_ID);
         if (sect) {
             sect.hidden = true;
             sect.style.display = 'none';
         }
+
+        // 3. 【关键修复】把原作者的容器恢复显示，不要让他们白屏！
+        document.querySelectorAll('.cc-sect-body').forEach(s => {
+            if (s.id === AUDIT_SECT_ID) return;
+            // 清空内联的 display 属性，让原作者自己的 CSS 类/JS 重新接管
+            if (s.style.display === 'none') {
+                s.style.display = '';
+            }
+            // 如果原容器本身不是 hidden，就放开限制
+            s.hidden = false;
+        });
     }
 
     /* ---------------- 事件监听 ---------------- */
@@ -1124,7 +1130,8 @@
         if (btn.matches(AUDIT_BTN_SEL)) {
             activateAudit(btn);
         } else {
-            deactivateAudit(); // 点击其他 Tab 时，自动切回并隐藏自己
+            // 只要点击的不是自己，就恢复原作者的所有东西
+            deactivateAudit();
         }
     }
 
