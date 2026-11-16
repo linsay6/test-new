@@ -69,13 +69,13 @@
   function findCard(cid) { try { for (var i = 0; i < DB.groups.length; i++) { var g = DB.groups[i]; for (var j = 0; j < g.cards.length; j++) if (g.cards[j].id === cid) return { group: g, card: g.cards[j] }; } } catch (e) {} return null; }
   function pushHistory(rec) { safe(function () { DB.history.push({ id: uid('h'), sender: rec.sender || SENDER_MJ, action: rec.action || 'add', text: rec.text || '', result: rec.result || 'agree', time: Date.now(), extra: rec.extra || '' }); if (DB.history.length > HISTORY_LIMIT) DB.history = DB.history.slice(-HISTORY_LIMIT); saveData(); }, 'pushHistory'); }
 
-     function injectBubbleToChat(text) {
+       function injectBubbleToChat(text) {
     var renderSuccess = false;
     try {
         var now = Date.now();
         var newMsg = { side: 'in', text: text, time: now };
         
-        // ========== 1. 数据写入部分 (独立容错，绝不阻断气泡渲染) ==========
+        // ========== 1. 数据写入部分 (极其保守的防御机制) ==========
         try {
             var cid = 'default';
             var store = null;
@@ -87,37 +87,47 @@
             var msgs = [];
             if (store && typeof store.get === 'function') {
                 try {
-                    msgs = store.get('chat-msgs') || [];
+                    msgs = store.get('chat-msgs');
+                    // 【核心修复】严防死守：如果返回的不是数组，直接造个空数组
                     if (!Array.isArray(msgs)) msgs = [];
+                    
                     if (msgs.length > 0) {
                         var template = null;
+                        // 使用 for 循环代替 filter，绝对不崩溃
                         for (var i = msgs.length - 1; i >= 0; i--) {
-                            if (msgs[i].side === 'in' && msgs[i].text) { template = msgs[i]; break; }
+                            if (msgs[i] && msgs[i].side === 'in' && msgs[i].text) { 
+                                template = msgs[i]; 
+                                break; 
+                            }
                         }
                         if (template) {
-                            newMsg = JSON.parse(JSON.stringify(template));
-                            newMsg.text = text;
-                            newMsg.time = now;
+                            // 安全深拷贝
+                            try {
+                                newMsg = JSON.parse(JSON.stringify(template));
+                                newMsg.text = text;
+                                newMsg.time = now;
+                            } catch(e) { newMsg = { side: 'in', text: text, time: now }; }
                         }
                     }
                     msgs.push(newMsg);
-                    // 原作者可能用 set，也可能用 save，都尝试一下
-                    if (typeof store.set === 'function') {
-                        store.set('chat-msgs', msgs);
-                    } else if (typeof store.save === 'function') {
-                        store.save('chat-msgs', msgs);
-                    }
+                    
+                    // 尝试多种写入方法
+                    if (typeof store.set === 'function') store.set('chat-msgs', msgs);
+                    else if (typeof store.save === 'function') store.save('chat-msgs', msgs);
                 } catch(err) {
-                    console.warn('[审计] 原网页 Store 写入失败，但不影响渲染', err);
+                    console.warn('[审计] 原网页 Store 写入失败，但不影响界面渲染', err);
                 }
-            } else {
-                var LS_KEY = 'xy-home-v2:' + cid + ':chat-msgs';
+            } 
+            
+            // 无论如何，强行往 localStorage 里塞一份，保证刷新有数据
+            var LS_KEY = 'xy-home-v2:' + cid + ':chat-msgs';
+            try {
                 var raw = localStorage.getItem(LS_KEY);
-                msgs = raw ? JSON.parse(raw) : [];
-                if (!Array.isArray(msgs)) msgs = [];
-                msgs.push(newMsg);
-                localStorage.setItem(LS_KEY, JSON.stringify(msgs));
-            }
+                var lsMsgs = raw ? JSON.parse(raw) : [];
+                if (!Array.isArray(lsMsgs)) lsMsgs = [];
+                lsMsgs.push(newMsg);
+                localStorage.setItem(LS_KEY, JSON.stringify(lsMsgs));
+            } catch(e) {}
 
             INJECTED_MSGS.push(newMsg); 
             if (INJECTED_MSGS.length > 50) INJECTED_MSGS.shift();
@@ -125,9 +135,9 @@
             console.warn('[审计] 数据预处理异常', dataErr);
         }
 
-        // ========== 2. DOM 渲染部分 ==========
+        // ========== 2. DOM 渲染部分 (确保一定能看到气泡) ==========
         var chatBody = document.getElementById('chat-body');
-        if (!chatBody) return true; // 不在聊天页视为成功
+        if (!chatBody) return true;
 
         try {
             var bubbleStyle = {
@@ -138,7 +148,6 @@
             var candidates = Array.from(chatBody.querySelectorAll('div, span, p'));
             for (var j = candidates.length - 1; j >= 0; j--) {
                 var el = candidates[j];
-                // 使用 window.getComputedStyle 更稳健
                 var bg = window.getComputedStyle(el).backgroundColor;
                 if (el.children.length === 0 && el.textContent.trim().length > 0 && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
                     var style = window.getComputedStyle(el);
