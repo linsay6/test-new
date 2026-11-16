@@ -69,60 +69,114 @@
   function findCard(cid) { try { for (var i = 0; i < DB.groups.length; i++) { var g = DB.groups[i]; for (var j = 0; j < g.cards.length; j++) if (g.cards[j].id === cid) return { group: g, card: g.cards[j] }; } } catch (e) {} return null; }
   function pushHistory(rec) { safe(function () { DB.history.push({ id: uid('h'), sender: rec.sender || SENDER_MJ, action: rec.action || 'add', text: rec.text || '', result: rec.result || 'agree', time: Date.now(), extra: rec.extra || '' }); if (DB.history.length > HISTORY_LIMIT) DB.history = DB.history.slice(-HISTORY_LIMIT); saveData(); }, 'pushHistory'); }
 
-  // 【绝对稳定】气泡注入方案
+   // 【绝对稳定】气泡注入方案 (高仿样式+内存同步版)
   function injectBubbleToChat(text) {
     try {
       var now = Date.now();
-      var newMsg = { side: 'in', text: text, time: now };
-      INJECTED_MSGS.push(newMsg); if (INJECTED_MSGS.length > 50) INJECTED_MSGS.shift();
-
-      // 1. 写入底层数据（确保刷新后原网页能渲染）
-      var msgs = readChatMsgs(); msgs.push(newMsg); localStorage.setItem(LS_KEY_CHAT, JSON.stringify(msgs));
       
-      var chatBody = document.getElementById('chat-body');
-      if (!chatBody) return true; // 如果不在聊天页，只写数据，进去时会渲染
-
-      // 2. 寻找最纯净的模版
-      var templateNode = null;
-      var children = Array.from(chatBody.children);
-      for (var i = children.length - 1; i >= 0; i--) {
-        var el = children[i], cls = (el.className || '').toLowerCase();
-        if (cls.indexOf('out') >= 0 || cls.indexOf('me') >= 0 || cls.indexOf('right') >= 0 || cls.indexOf('self') >= 0) continue;
-        var txt = el.textContent || '';
-        if (txt.indexOf('语音') >= 0 || txt.indexOf('通话') >= 0 || txt.indexOf('词典') >= 0) continue; 
-        if (txt.trim().length > 0) { templateNode = el; break; }
-      }
-
-      var bubbleEl;
-      if (templateNode) {
-          bubbleEl = templateNode.cloneNode(true);
-          if (bubbleEl.id) bubbleEl.removeAttribute('id');
-          var nodesWithId = bubbleEl.querySelectorAll('[id]'); for (var k = 0; k < nodesWithId.length; k++) nodesWithId[k].removeAttribute('id');
-          
-          if (bubbleEl.classList) { bubbleEl.classList.remove('msg-out', 'me', 'right', 'self'); bubbleEl.classList.add('msg-in', 'left'); }
-          bubbleEl.style.alignSelf = 'flex-start'; bubbleEl.style.marginLeft = '0'; bubbleEl.style.marginRight = 'auto';
-          
-          var walker = document.createTreeWalker(bubbleEl, NodeFilter.SHOW_TEXT, null, false), maxLen = 0, targetTextNode = null, tn;
-          while ((tn = walker.nextNode())) { var len = tn.nodeValue.trim().length; if (len > maxLen) { maxLen = len; targetTextNode = tn; } }
-          if (targetTextNode) targetTextNode.nodeValue = text; else bubbleEl.innerText = text;
+      // 1. 尝试构造符合要求的数据并写入原作者的 Store 内存
+      var cid = 'default';
+      var store = (window.storeFor && window.storeFor(cid)) || 
+                  (window.xyStore && window.xyStore('xy-home-v2:' + cid));
+                  
+      var newMsg = { side: 'in', text: text, time: now };
+      var msgs = [];
+      
+      if (store && typeof store.get === 'function' && typeof store.set === 'function') {
+          msgs = store.get('chat-msgs') || [];
+          // 深拷贝上一条对方消息，保证字段完整，防止被原网页清洗
+          if (msgs.length > 0) {
+              var template = msgs.filter(function(m) { return m.side === 'in'; }).pop() || msgs[0];
+              if (template) {
+                  newMsg = JSON.parse(JSON.stringify(template));
+                  newMsg.text = text;
+                  newMsg.time = now;
+                  if (newMsg.id) newMsg.id = 'msg_' + Date.now() + Math.random().toString(36).slice(2, 6);
+              }
+          }
+          msgs.push(newMsg);
+          store.set('chat-msgs', msgs); // 【核心】直接写内存，刷新不丢
       } else {
-          // 兜底：完全自建
-          bubbleEl = document.createElement('div');
-          bubbleEl.className = 'msg in left';
-          bubbleEl.style.cssText = 'display:flex; margin: 10px 15px; align-self: flex-start; clear: both;';
-          var inner = document.createElement('div');
-          inner.style.cssText = 'max-width: 75%; padding: 10px 14px; border-radius: 14px; background: #fff; color: #333; font-size: 14px; word-break: break-all; box-shadow: 0 1px 2px rgba(0,0,0,0.05); line-height: 1.4;';
-          inner.textContent = text;
-          bubbleEl.appendChild(inner);
+          // 降级：只写 localStorage
+          var LS_KEY = 'xy-home-v2:' + cid + ':chat-msgs';
+          msgs = readChatMsgs();
+          if (msgs.length > 0) {
+              var template2 = msgs.filter(function(m) { return m.side === 'in'; }).pop() || msgs[0];
+              if (template2) {
+                  newMsg = JSON.parse(JSON.stringify(template2));
+                  newMsg.text = text;
+                  newMsg.time = now;
+              }
+          }
+          msgs.push(newMsg);
+          localStorage.setItem(LS_KEY, JSON.stringify(msgs));
       }
-      bubbleEl.setAttribute('data-ma-injected', '1');
-      chatBody.appendChild(bubbleEl);
+
+      INJECTED_MSGS.push(newMsg); 
+      if (INJECTED_MSGS.length > 50) INJECTED_MSGS.shift();
+
+      var chatBody = document.getElementById('chat-body');
+      if (!chatBody) return true; // 不在聊天页则只写数据
+
+      // 2. DOM 高仿组装（彻底放弃危险的全盘克隆）
+      // 寻找一个现有的对方纯文本气泡来偷取样式
+      var bubbleStyle = {
+          backgroundColor: '#ffffff', color: '#333', borderRadius: '8px', 
+          padding: '10px 14px', fontSize: '15px', lineHeight: '1.5'
+      };
+      
+      var candidates = Array.from(chatBody.querySelectorAll('div, span, p'));
+      for (var i = candidates.length - 1; i >= 0; i--) {
+          var el = candidates[i];
+          var bg = getComputedStyle(el).backgroundColor;
+          // 寻找有背景色且没有子元素的文本节点
+          if (el.children.length === 0 && el.textContent.trim().length > 0 && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+              var style = getComputedStyle(el);
+              bubbleStyle.backgroundColor = style.backgroundColor;
+              bubbleStyle.color = style.color;
+              bubbleStyle.borderRadius = style.borderRadius;
+              bubbleStyle.padding = style.padding;
+              bubbleStyle.fontSize = style.fontSize;
+              bubbleStyle.lineHeight = style.lineHeight;
+              break;
+          }
+      }
+
+      // 组装外层容器
+      var wrapper = document.createElement('div');
+      wrapper.setAttribute('data-ma-injected', '1');
+      wrapper.style.cssText = 'display: flex; align-items: flex-start; margin-bottom: 15px; padding: 10px;';
+      
+      // 偷取当前聊天框里的头像
+      var sampleAvatar = chatBody.querySelector('img');
+      var avatarEl;
+      if (sampleAvatar) {
+          avatarEl = sampleAvatar.cloneNode();
+          avatarEl.style.cssText = 'width: 38px; height: 38px; border-radius: 4px; margin-right: 12px; flex-shrink: 0; object-fit: cover;';
+      } else {
+          avatarEl = document.createElement('div');
+          avatarEl.style.cssText = 'width: 38px; height: 38px; border-radius: 4px; background: #ddd; margin-right: 12px; flex-shrink: 0;';
+      }
+
+      // 组装气泡
+      var bubble = document.createElement('div');
+      Object.assign(bubble.style, bubbleStyle);
+      bubble.textContent = text;
+      bubble.className = 'bubble msg-content'; 
+
+      wrapper.appendChild(avatarEl);
+      wrapper.appendChild(bubble);
+      chatBody.appendChild(wrapper);
+      
       try { chatBody.scrollTop = chatBody.scrollHeight; window.scrollTo(0, document.body.scrollHeight); } catch (e) {}
       return true;
-    } catch (err) { return false; }
+    } catch (err) { 
+        console.error('[injectBubbleToChat] 错误:', err);
+        return false; 
+    }
   }
 
-  // 刷新或重进补气泡
+  // 刷新或重进补气泡 (同步更新为高仿样式)
   function checkAndRepairChat() {
     var chatBody = document.getElementById('chat-body');
     if (!chatBody || INJECTED_MSGS.length === 0) return;
@@ -130,39 +184,53 @@
     if (injectedNodes.length === INJECTED_MSGS.length) return;
     
     for (var i = 0; i < injectedNodes.length; i++) injectedNodes[i].remove();
-    var templateNode = null;
-    var children = Array.from(chatBody.children);
-    for (var i = children.length - 1; i >= 0; i--) {
-      var el = children[i], cls = (el.className || '').toLowerCase();
-      if (cls.indexOf('out') >= 0 || cls.indexOf('me') >= 0 || cls.indexOf('right') >= 0) continue;
-      var txt = el.textContent || '';
-      if (txt.indexOf('语音') >= 0 || txt.indexOf('通话') >= 0 || txt.indexOf('词典') >= 0) continue; 
-      if (txt.trim().length > 0) { templateNode = el; break; }
+    
+    // 提取样式
+    var bubbleStyle = {
+        backgroundColor: '#ffffff', color: '#333', borderRadius: '8px', 
+        padding: '10px 14px', fontSize: '15px', lineHeight: '1.5'
+    };
+    var candidates = Array.from(chatBody.querySelectorAll('div, span, p'));
+    for (var j = candidates.length - 1; j >= 0; j--) {
+        var el = candidates[j];
+        var bg = getComputedStyle(el).backgroundColor;
+        if (el.children.length === 0 && el.textContent.trim().length > 0 && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+            var style = getComputedStyle(el);
+            bubbleStyle.backgroundColor = style.backgroundColor;
+            bubbleStyle.color = style.color;
+            bubbleStyle.borderRadius = style.borderRadius;
+            bubbleStyle.padding = style.padding;
+            bubbleStyle.fontSize = style.fontSize;
+            bubbleStyle.lineHeight = style.lineHeight;
+            break;
+        }
     }
+    var sampleAvatar = chatBody.querySelector('img');
 
     for (var m = 0; m < INJECTED_MSGS.length; m++) {
         var msg = INJECTED_MSGS[m];
-        var bubbleEl;
-        if (templateNode) {
-            bubbleEl = templateNode.cloneNode(true);
-            if (bubbleEl.id) bubbleEl.removeAttribute('id');
-            var nodesWithId = bubbleEl.querySelectorAll('[id]'); for (var k = 0; k < nodesWithId.length; k++) nodesWithId[k].removeAttribute('id');
-            if (bubbleEl.classList) { bubbleEl.classList.remove('msg-out', 'me', 'right', 'self'); bubbleEl.classList.add('msg-in', 'left'); }
-            bubbleEl.style.alignSelf = 'flex-start'; bubbleEl.style.marginLeft = '0'; bubbleEl.style.marginRight = 'auto';
-            var walker = document.createTreeWalker(bubbleEl, NodeFilter.SHOW_TEXT, null, false), maxLen = 0, targetTextNode = null, tn;
-            while ((tn = walker.nextNode())) { var len = tn.nodeValue.trim().length; if (len > maxLen) { maxLen = len; targetTextNode = tn; } }
-            if (targetTextNode) targetTextNode.nodeValue = msg.text; else bubbleEl.innerText = msg.text;
+        
+        var wrapper = document.createElement('div');
+        wrapper.setAttribute('data-ma-injected', '1');
+        wrapper.style.cssText = 'display: flex; align-items: flex-start; margin-bottom: 15px; padding: 10px;';
+        
+        var avatarEl;
+        if (sampleAvatar) {
+            avatarEl = sampleAvatar.cloneNode();
+            avatarEl.style.cssText = 'width: 38px; height: 38px; border-radius: 4px; margin-right: 12px; flex-shrink: 0; object-fit: cover;';
         } else {
-            bubbleEl = document.createElement('div');
-            bubbleEl.className = 'msg in left';
-            bubbleEl.style.cssText = 'display:flex; margin: 10px 15px; align-self: flex-start; clear: both;';
-            var inner = document.createElement('div');
-            inner.style.cssText = 'max-width: 75%; padding: 10px 14px; border-radius: 14px; background: #fff; color: #333; font-size: 14px; word-break: break-all; box-shadow: 0 1px 2px rgba(0,0,0,0.05); line-height: 1.4;';
-            inner.textContent = msg.text;
-            bubbleEl.appendChild(inner);
+            avatarEl = document.createElement('div');
+            avatarEl.style.cssText = 'width: 38px; height: 38px; border-radius: 4px; background: #ddd; margin-right: 12px; flex-shrink: 0;';
         }
-        bubbleEl.setAttribute('data-ma-injected', '1');
-        chatBody.appendChild(bubbleEl);
+
+        var bubble = document.createElement('div');
+        Object.assign(bubble.style, bubbleStyle);
+        bubble.textContent = msg.text;
+        bubble.className = 'bubble msg-content'; 
+
+        wrapper.appendChild(avatarEl);
+        wrapper.appendChild(bubble);
+        chatBody.appendChild(wrapper);
     }
     try { chatBody.scrollTop = chatBody.scrollHeight; } catch (e) {}
   }
