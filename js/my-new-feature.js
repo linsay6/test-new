@@ -916,7 +916,7 @@
 
 })();
 /* ============================================================
- * 审核报告字卡 · 第三个 Tab (精简纯净版：去除了启用禁用与发送)
+ * 审核报告字卡 · 第三个 Tab (精简纯净版+灰色角标)
  * ============================================================ */
 (function () {
     'use strict';
@@ -925,7 +925,6 @@
     const AUDIT_SECT_ID = 'cc-sect-audit';
     const STORAGE_KEY   = 'my-audit-cards';
     
-    // 记录折叠状态
     let collapsedGroups = new Set();
 
     /* ---------------- 样式注入 ---------------- */
@@ -944,7 +943,6 @@
     box-sizing: border-box;
     background: #f7f8fa;
 }
-/* 工具栏 */
 .my-audit-toolbar {
     display: flex;
     flex-direction: column;
@@ -987,7 +985,6 @@
 }
 .my-audit-selected-count { color: #999; font-size: 12px; margin-left: auto; }
 
-/* 分组卡片 */
 .my-audit-group {
     background: #fff;
     border-radius: 12px;
@@ -1013,20 +1010,17 @@
 .my-audit-group-actions span.danger { color: #ff4d4f; border-color: #ffcccc; }
 .my-audit-group-actions span.danger:hover { background: #fff1f0; }
 
-/* 折叠按钮 */
 .btn-collapse {
     cursor: pointer; font-size: 12px; color: #666;
     width: 16px; text-align: center; user-select: none;
 }
 
-/* 卡片列表 */
 .my-audit-cards { display: flex; flex-direction: column; }
 .my-audit-card {
     display: flex; align-items: center; justify-content: space-between;
     padding: 10px 14px; border-bottom: 1px dashed #f0f0f0; gap: 10px;
 }
 .my-audit-card:last-child { border-bottom: none; }
-/* 保留原有的禁用样式（如果数据里有禁用的，依然显示划线） */
 .my-audit-card.is-disabled .card-text { color: #ccc; text-decoration: line-through; }
 
 .card-left { display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0; }
@@ -1035,7 +1029,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
 .card-text { font-size: 14px; color: #333; word-break: break-all; line-height: 1.5; }
 .card-status-tag { font-size: 11px; color: #ff4d4f; }
 
-/* 卡片操作按钮 */
 .my-audit-card-actions { display: flex; gap: 6px; font-size: 12px; flex-shrink: 0; }
 .my-audit-card-actions span {
     cursor: pointer; padding: 2px 8px; border-radius: 4px;
@@ -1051,7 +1044,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
         document.head.appendChild(style);
     }
 
-    /* ---------------- 数据读写 ---------------- */
     function getStoreData() {
         try {
             let raw = localStorage.getItem(STORAGE_KEY);
@@ -1061,7 +1053,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
             if (!obj.groups) obj.groups = [];
             return obj;
         } catch (e) {
-            console.error('[my-audit] 数据读取失败', e);
             return { version: 1, groups: [] };
         }
     }
@@ -1069,13 +1060,10 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
     function saveStoreData(obj) {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
-            // 强制触发悬浮球重载
             if (window.__MY_AUDIT__ && typeof window.__MY_AUDIT__.reload === 'function') {
                 window.__MY_AUDIT__.reload();
             }
-        } catch (e) {
-            console.error('[my-audit] 数据保存失败', e);
-        }
+        } catch (e) {}
     }
 
     function getCards(g) {
@@ -1086,7 +1074,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
         return [];
     }
 
-    /* ---------------- 渲染 UI ---------------- */
     const HTML_ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
     function escapeHtml(v) {
         return String(v == null ? '' : v).replace(/[&<>"']/g, ch => HTML_ESC[ch]);
@@ -1099,19 +1086,18 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
         const obj = getStoreData();
         const groups = obj.groups || [];
         
-        // 1. 统计顶部角标
         let totalCards = 0;
         groups.forEach(g => totalCards += getCards(g).length);
         
         const auditBtn = document.querySelector(AUDIT_BTN_SEL);
         if (auditBtn) {
-            const badgeStyle = 'display:inline-block;background:#ff4d4f;color:#fff;border-radius:10px;padding:0 5px;font-size:11px;margin-left:4px;vertical-align:middle;line-height:16px;';
+            // 【修改点】角标样式改为原作者同款的浅灰蓝底、深灰字
+            const badgeStyle = 'display:inline-block;background:#f0f2f5;color:#909399;border-radius:10px;padding:0 6px;font-size:11px;margin-left:6px;vertical-align:middle;line-height:18px;font-weight:normal;';
             auditBtn.innerHTML = `审核报告字卡 <span style="${badgeStyle}">${totalCards}</span>`;
         }
 
         let html = '<div class="my-audit-wrap">';
 
-        // 2. 顶部工具栏
         html += `<div class="my-audit-toolbar">
             <div class="toolbar-row">
                 <label><input type="checkbox" id="my-audit-select-all"> 全选</label>
@@ -1130,7 +1116,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
             </div>
         </div>`;
 
-        // 3. 分组渲染
         if (!groups.length) {
             html += '<div class="my-audit-empty">暂无字卡，去悬浮球里添加吧~</div>';
         } else {
@@ -1141,7 +1126,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
                 const isCollapsed = collapsedGroups.has(gIdx);
                 
                 html += `<div class="my-audit-group">`;
-                // 分组头部
                 html += `  <div class="my-audit-group-header">`;
                 html += `    <div class="my-audit-group-title">`;
                 html += `      <span class="btn-collapse" data-action="collapse" data-gidx="${gIdx}">${isCollapsed ? '▶' : '▼'}</span>`;
@@ -1157,7 +1141,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
                 html += `    </div>`;
                 html += `  </div>`;
                 
-                // 卡片列表
                 if (!isCollapsed) {
                     html += `  <div class="my-audit-cards">`;
                     if (!cards.length) {
@@ -1167,7 +1150,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
                             const text = c.text || c.content || '';
                             const isCardDisabled = c.isDisabled === true || c.isDisabled === 'true';
                             
-                            // 保留原本数据的禁用状态提示，但用户无法操作
                             let statusTag = '';
                             if (isGroupDisabled) statusTag = '随分组禁用';
                             else if (isCardDisabled) statusTag = '单方禁用';
@@ -1181,7 +1163,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
                             html += `    </div>`;
                             html += `  </div>`;
                             html += `  <div class="my-audit-card-actions">`;
-                            // 移除了发送和启用禁用，只保留编辑和删除
                             html += `    <span data-action="edit-card" data-gidx="${gIdx}" data-cidx="${cIdx}">编辑</span>`;
                             html += `    <span class="btn-danger" data-action="delete-card" data-gidx="${gIdx}" data-cidx="${cIdx}">删除</span>`;
                             html += `  </div>`;
@@ -1198,12 +1179,10 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
         container.innerHTML = html;
     }
 
-    /* ---------------- 交互逻辑中心 ---------------- */
     function bindEvents() {
         const container = document.getElementById(AUDIT_SECT_ID);
         if (!container) return;
 
-        // Checkbox 联动
         container.addEventListener('change', function(e) {
             const target = e.target;
             if (target.id === 'my-audit-select-all') {
@@ -1240,7 +1219,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
             if (allCheck) allCheck.checked = allBoxes.length > 0 && allBoxes.length === checkedBoxes.length;
         }
 
-        // 按钮点击
         container.addEventListener('click', function(e) {
             const target = e.target.closest('span[data-action]');
             if (!target) return;
@@ -1256,7 +1234,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
             let groups = obj.groups;
             let changed = false;
 
-            /* --- 折叠操作 --- */
             if (action === 'collapse') {
                 if (collapsedGroups.has(gIdx)) collapsedGroups.delete(gIdx);
                 else collapsedGroups.add(gIdx);
@@ -1264,7 +1241,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
                 return;
             }
 
-            /* --- 批量操作 --- */
             if (action.startsWith('batch-') || action === 'dedup-all') {
                 const checked = Array.from(container.querySelectorAll('.card-checkbox:checked'));
                 if (action.startsWith('batch-') && !checked.length) return alert('请先勾选要操作的卡片');
@@ -1318,8 +1294,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
                     changed = true;
                 }
             }
-            
-            /* --- 新建分类 --- */
             else if (action === 'create-group') {
                 const input = container.querySelector('#my-audit-new-group-name');
                 const newName = input.value.trim();
@@ -1327,8 +1301,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
                 groups.push({ name: newName, cards: [] });
                 changed = true;
             }
-
-            /* --- 分组操作 --- */
             else if (action === 'rename-group') {
                 const newName = prompt('输入新的分类名称：', groups[gIdx].name);
                 if (newName && newName.trim()) {
@@ -1350,8 +1322,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
                     changed = true;
                 }
             }
-            
-            /* --- 卡片操作（仅保留编辑和删除） --- */
             else {
                 const cards = getCards(groups[gIdx]);
                 const card = cards[cIdx];
@@ -1379,7 +1349,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
         });
     }
 
-    /* ---------------- Tab 切换逻辑 ---------------- */
     function activateAudit(auditBtn) {
         const sect = document.getElementById(AUDIT_SECT_ID);
         if (!sect) return;
@@ -1404,7 +1373,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
         if (sect) sect.hidden = true;
     }
 
-    /* ---------------- 初始化 ---------------- */
     function onClickTab(e) {
         const btn = e.target && e.target.closest && e.target.closest('.cc-tab');
         if (!btn) return;
