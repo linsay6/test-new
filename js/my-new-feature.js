@@ -916,7 +916,7 @@
 
 })();
 /* ============================================================
- * 审核报告字卡 · 第三个 Tab (悬浮球完全体复刻+双向同步+折叠+转移)
+ * 审核报告字卡 · 第三个 Tab (精简纯净版：去除了启用禁用与发送)
  * ============================================================ */
 (function () {
     'use strict';
@@ -1004,11 +1004,6 @@
 }
 .my-audit-group-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: bold; color: #333; }
 .my-audit-count { font-size: 12px; color: #999; font-weight: normal; }
-.my-group-status {
-    font-size: 11px; color: #ff4d4f; background: #fff1f0;
-    padding: 1px 6px; border-radius: 4px; font-weight: normal; display: none;
-}
-.my-group-status.status-disabled { display: inline-block; }
 .my-audit-group-actions { display: flex; gap: 6px; font-size: 12px; color: #666; }
 .my-audit-group-actions span {
     cursor: pointer; padding: 3px 8px; border-radius: 4px;
@@ -1031,6 +1026,7 @@
     padding: 10px 14px; border-bottom: 1px dashed #f0f0f0; gap: 10px;
 }
 .my-audit-card:last-child { border-bottom: none; }
+/* 保留原有的禁用样式（如果数据里有禁用的，依然显示划线） */
 .my-audit-card.is-disabled .card-text { color: #ccc; text-decoration: line-through; }
 
 .card-left { display: flex; align-items: flex-start; gap: 8px; flex: 1; min-width: 0; }
@@ -1047,8 +1043,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
     user-select: none; transition: all 0.15s;
 }
 .my-audit-card-actions span:hover { background: #f4f4f5; }
-.my-audit-card-actions span.btn-send { color: #ff4d4f; border-color: #ffcccc; background: #fff1f0; }
-.my-audit-card-actions span.btn-send:hover { background: #ffe4e4; }
 .my-audit-card-actions span.btn-danger { color: #ff4d4f; border-color: #ffcccc; }
 .my-audit-card-actions span.btn-danger:hover { background: #fff1f0; }
 
@@ -1075,12 +1069,10 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
     function saveStoreData(obj) {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
-            // 【核心修复】强制触发悬浮球内存重载
+            // 强制触发悬浮球重载
             if (window.__MY_AUDIT__ && typeof window.__MY_AUDIT__.reload === 'function') {
                 window.__MY_AUDIT__.reload();
             }
-            // 广播事件，让外部也可以监听同步
-            document.dispatchEvent(new CustomEvent('my-audit-synced'));
         } catch (e) {
             console.error('[my-audit] 数据保存失败', e);
         }
@@ -1107,7 +1099,7 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
         const obj = getStoreData();
         const groups = obj.groups || [];
         
-        // 1. 统计并更新顶部 Tab 按钮的总数
+        // 1. 统计顶部角标
         let totalCards = 0;
         groups.forEach(g => totalCards += getCards(g).length);
         
@@ -1155,19 +1147,17 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
                 html += `      <span class="btn-collapse" data-action="collapse" data-gidx="${gIdx}">${isCollapsed ? '▶' : '▼'}</span>`;
                 html += `      <input type="checkbox" class="my-group-check" data-gidx="${gIdx}">`;
                 html += `      ${escapeHtml(name)}`;
-                html += `      <span class="my-group-status ${isGroupDisabled ? 'status-disabled' : ''}">分组已禁用</span>`;
                 html += `      <span class="my-audit-count">(${cards.length})</span>`;
                 html += `    </div>`;
                 html += `    <div class="my-audit-group-actions">`;
                 html += `      <span data-action="rename-group" data-gidx="${gIdx}">重命名</span>`;
                 html += `      <span data-action="move-up" data-gidx="${gIdx}">↑</span>`;
                 html += `      <span data-action="move-down" data-gidx="${gIdx}">↓</span>`;
-                html += `      <span data-action="toggle-group" data-gidx="${gIdx}">${isGroupDisabled ? '启用' : '禁用'}</span>`;
                 html += `      <span class="danger" data-action="delete-group" data-gidx="${gIdx}">删除分组</span>`;
                 html += `    </div>`;
                 html += `  </div>`;
                 
-                // 卡片列表（如果未折叠）
+                // 卡片列表
                 if (!isCollapsed) {
                     html += `  <div class="my-audit-cards">`;
                     if (!cards.length) {
@@ -1177,7 +1167,7 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
                             const text = c.text || c.content || '';
                             const isCardDisabled = c.isDisabled === true || c.isDisabled === 'true';
                             
-                            // 状态提示文字
+                            // 保留原本数据的禁用状态提示，但用户无法操作
                             let statusTag = '';
                             if (isGroupDisabled) statusTag = '随分组禁用';
                             else if (isCardDisabled) statusTag = '单方禁用';
@@ -1191,9 +1181,8 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
                             html += `    </div>`;
                             html += `  </div>`;
                             html += `  <div class="my-audit-card-actions">`;
-                            html += `    <span class="btn-send" data-action="send-card" data-gidx="${gIdx}" data-cidx="${cIdx}">发送</span>`;
+                            // 移除了发送和启用禁用，只保留编辑和删除
                             html += `    <span data-action="edit-card" data-gidx="${gIdx}" data-cidx="${cIdx}">编辑</span>`;
-                            html += `    <span data-action="toggle-card" data-gidx="${gIdx}" data-cidx="${cIdx}">${isCardDisabled ? '启用' : '禁用'}</span>`;
                             html += `    <span class="btn-danger" data-action="delete-card" data-gidx="${gIdx}" data-cidx="${cIdx}">删除</span>`;
                             html += `  </div>`;
                             html += `</div>`;
@@ -1207,36 +1196,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
         
         html += '</div>';
         container.innerHTML = html;
-    }
-
-    /* ---------------- 发送逻辑 ---------------- */
-    function sendTextToChat(text) {
-        const input = document.querySelector('textarea') || document.querySelector('input[type="text"]');
-        if (!input) {
-            alert('未找到输入框，已复制到剪贴板：\\n' + text);
-            navigator.clipboard.writeText(text);
-            return;
-        }
-        input.focus();
-        // 使用原生 setter 绕过 React/Vue 的拦截
-        let nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
-        if (input.tagName.toLowerCase() === 'textarea') {
-            nativeSetter.call(input, text);
-        } else {
-            const inputSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-            if (inputSetter) inputSetter.call(input, text);
-            else input.value = text;
-        }
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-
-        const sendBtn = document.querySelector('.send-btn, [class*="send-btn"]');
-        if (sendBtn) {
-            sendBtn.click();
-        } else {
-            // 尝试回车
-            input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-            input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
-        }
     }
 
     /* ---------------- 交互逻辑中心 ---------------- */
@@ -1268,7 +1227,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
             const countEl = container.querySelector('.my-audit-selected-count');
             if (countEl) countEl.textContent = `已选 ${checkedBoxes.length} 项`;
             
-            // 同步组头部的全选状态
             const obj = getStoreData();
             (obj.groups || []).forEach((g, gIdx) => {
                 const allBoxes = container.querySelectorAll(`.card-checkbox[data-gidx="${gIdx}"]`);
@@ -1386,10 +1344,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
                 [groups[gIdx + 1], groups[gIdx]] = [groups[gIdx], groups[gIdx + 1]];
                 changed = true;
             }
-            else if (action === 'toggle-group') {
-                groups[gIdx].isDisabled = !(groups[gIdx].isDisabled === true || groups[gIdx].isDisabled === 'true');
-                changed = true;
-            }
             else if (action === 'delete-group') {
                 if (confirm(`确定要删除【${groups[gIdx].name}】及其下的所有卡片吗？`)) {
                     groups.splice(gIdx, 1);
@@ -1397,26 +1351,18 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
                 }
             }
             
-            /* --- 卡片操作 --- */
+            /* --- 卡片操作（仅保留编辑和删除） --- */
             else {
                 const cards = getCards(groups[gIdx]);
                 const card = cards[cIdx];
                 if (!card) return;
 
-                if (action === 'send-card') {
-                    const text = card.text || card.content || '';
-                    sendTextToChat(text);
-                }
-                else if (action === 'edit-card') {
+                if (action === 'edit-card') {
                     const newText = prompt('修改卡片内容：', card.text || card.content || '');
                     if (newText !== null && newText.trim() !== '') {
                         card.text = newText.trim();
                         changed = true;
                     }
-                }
-                else if (action === 'toggle-card') {
-                    card.isDisabled = !(card.isDisabled === true || card.isDisabled === 'true');
-                    changed = true;
                 }
                 else if (action === 'delete-card') {
                     if (confirm('确定删除这张卡片吗？')) {
