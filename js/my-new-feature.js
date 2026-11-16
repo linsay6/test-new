@@ -915,3 +915,224 @@
   try { onReady(function () { try { bootstrap(); } catch (err) { try { injectCSS(); ensureRoot(); toast('初始化异常'); } catch (e2) {} } }); } catch (e) { try { injectCSS(); } catch (e2) {} }
 
 })();
+/* ============================================================
+ * 审核报告字卡 · 第三个 Tab
+ * 独立文件：my-new-feature.js
+ * 依赖：index.html 中的
+ *   <button class="cc-tab" data-ccsel="audit">审核报告字卡</button>
+ *   <div class="cc-sect-body" id="cc-sect-audit" hidden></div>
+ * 数据：localStorage['my-audit-cards'] = { groups: { 分类: [{text}, ...] } }
+ * ============================================================ */
+(function () {
+    'use strict';
+
+    const AUDIT_BTN_SEL = '[data-ccsel="audit"]';
+    const AUDIT_SECT_ID = 'cc-sect-audit';
+    const STORAGE_KEY   = 'my-audit-cards';
+
+    /* ---------------- 样式（只注入一次） ---------------- */
+    function injectStyle() {
+        if (document.getElementById('my-audit-style')) return;
+        const style = document.createElement('style');
+        style.id = 'my-audit-style';
+        style.textContent = `
+/* 让 hidden 属性在所有情况下都生效，避免和原作者 display 样式打架 */
+.cc-sect-body[hidden] { display: none !important; }
+
+.my-audit-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 10px 4px;
+    max-height: 100%;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+.my-audit-group-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+}
+.my-audit-count {
+    font-size: 11px;
+    font-weight: 500;
+    background: #eef2ff;
+    color: #4f6ef7;
+    padding: 1px 8px;
+    border-radius: 10px;
+}
+.my-audit-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+}
+.my-audit-card {
+    background: #fff;
+    border: 1px solid #e6e8ef;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #333;
+    white-space: pre-wrap;
+    word-break: break-word;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+    transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.my-audit-card:hover {
+    border-color: #4f6ef7;
+    box-shadow: 0 4px 14px rgba(79, 110, 247, .15);
+    transform: translateY(-1px);
+}
+.my-audit-empty {
+    text-align: center;
+    color: #999;
+    font-size: 13px;
+    padding: 40px 0;
+}
+`;
+        document.head.appendChild(style);
+    }
+
+    /* ---------------- 数据读取与规范化 ---------------- */
+    function loadAuditGroups() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return {};
+            const obj = JSON.parse(raw);
+            if (!obj || typeof obj !== 'object') return {};
+            if (obj.groups && typeof obj.groups === 'object') return obj.groups;
+            // 兼容直接存 {"情话":[...]} 的情况
+            if (!Array.isArray(obj)) return obj;
+            return {};
+        } catch (e) {
+            console.warn('[my-audit] 解析 my-audit-cards 失败:', e);
+            return {};
+        }
+    }
+
+    function normalizeCards(list) {
+        if (!Array.isArray(list)) return [];
+        return list.filter(c =>
+            c && typeof c === 'object' &&
+            c.isDisabled !== true && c.isDisabled !== 'true'
+        );
+    }
+
+    /* ---------------- 渲染 ---------------- */
+    const HTML_ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    function escapeHtml(v) {
+        return String(v == null ? '' : v).replace(/[&<>"']/g, ch => HTML_ESC[ch]);
+    }
+
+    function renderAudit(container) {
+        const groups = loadAuditGroups();
+        let html = '';
+        let total = 0;
+
+        Object.keys(groups).forEach(name => {
+            const cards = normalizeCards(groups[name]);
+            if (!cards.length) return;
+            total += cards.length;
+
+            html += '<div class="my-audit-group">';
+            html += '  <div class="my-audit-group-title">' +
+                    escapeHtml(name) +
+                    '<span class="my-audit-count">' + cards.length + '</span>' +
+                    '</div>';
+            html += '  <div class="my-audit-cards">';
+            cards.forEach(card => {
+                const text = card.text != null ? card.text
+                           : card.content != null ? card.content
+                           : card.title != null ? card.title
+                           : '';
+                html += '<div class="my-audit-card">' + escapeHtml(text) + '</div>';
+            });
+            html += '  </div>';
+            html += '</div>';
+        });
+
+        if (!total) html = '<div class="my-audit-empty">暂无审核报告字卡</div>';
+        container.innerHTML = '<div class="my-audit-wrap">' + html + '</div>';
+    }
+
+    /* ---------------- Tab 切换 ---------------- */
+    function activateAudit(auditBtn) {
+        const sect = document.getElementById(AUDIT_SECT_ID);
+        if (!sect) return;
+
+        // 1. 隐藏其他 Tab 按钮，只高亮 audit
+        document.querySelectorAll('.cc-tab').forEach(btn => {
+            if (btn === auditBtn) {
+                btn.classList.add('sel');
+            } else {
+                if (btn.style.display !== 'none') {
+                    // 记录原始 display，恢复时还原
+                    btn.dataset.myAuditPrevDisplay = btn.style.display || '';
+                }
+                btn.style.display = 'none';
+                btn.classList.remove('sel');
+            }
+        });
+
+        // 2. 隐藏其他 sect，显示 audit
+        document.querySelectorAll('.cc-sect-body').forEach(s => {
+            if (s === sect) return;
+            s.hidden = true;
+        });
+        sect.hidden = false;
+
+        // 3. 渲染
+        renderAudit(sect);
+    }
+
+    function deactivateAudit() {
+        // 还原被我们隐藏的 Tab 按钮
+        document.querySelectorAll('.cc-tab').forEach(btn => {
+            if (btn.dataset && 'myAuditPrevDisplay' in btn.dataset) {
+                btn.style.display = btn.dataset.myAuditPrevDisplay || '';
+                delete btn.dataset.myAuditPrevDisplay;
+            }
+        });
+
+        // 去掉 audit 按钮的高亮
+        const auditBtn = document.querySelector(AUDIT_BTN_SEL);
+        if (auditBtn) auditBtn.classList.remove('sel');
+
+        // 隐藏 audit 容器（其余容器由原作者逻辑负责显示）
+        const sect = document.getElementById(AUDIT_SECT_ID);
+        if (sect) sect.hidden = true;
+    }
+
+    /* ---------------- 事件委托（点击任意 .cc-tab） ---------------- */
+    function onClick(e) {
+        const btn = e.target && e.target.closest && e.target.closest('.cc-tab');
+        if (!btn) return;
+
+        if (btn.matches(AUDIT_BTN_SEL)) {
+            // 点击 audit：走我们的逻辑
+            activateAudit(btn);
+        } else {
+            // 点击 own / public：交还原作者，我们只负责收尾
+            deactivateAudit();
+        }
+    }
+
+    function init() {
+        injectStyle();
+        document.addEventListener('click', onClick, false);
+    }
+
+    /* 暴露一个重置方法，供外部（如抽屉每次打开时）调用 */
+    window.myAuditReset = deactivateAudit;
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
