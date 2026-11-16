@@ -11580,10 +11580,12 @@ font-size: 11.5px; color: var(--muted, #8a8a8a); cursor: pointer; touch-action: 
       <div class="card-tabs cc-top-tabs">
         <button class="cc-tab sel" data-ccsect="custom">可自定义字卡</button>
         <button class="cc-tab" data-ccsect="preset">系统预设字卡</button>
+           <button class="cc-tab" data-ccsel="audit">审核报告字卡</button>
       </div>
       <div class="tc-search-wrap" style="padding:0 12px 8px">
         <input type="text" id="chatcard-search" class="tc-input" placeholder="搜索字卡内容…" style="width:100%">
       </div>
+         <div class="cc-sect-body" id="cc-sect-audit" hidden></div>
       <div class="cc-sect-body" id="cc-sect-custom">
       <!-- v3.11.x：自定义聊天字卡拆双作用域——公用（全桌面共享）/ 专属（仅当前桌面联系人） -->
       <div class="chat-item glass" id="li-custom-cards-public">
