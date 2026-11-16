@@ -916,7 +916,7 @@
 
 })();
 /* ============================================================
- * 审核报告字卡 · 第三个 Tab (悬浮球一比一复刻+双向同步版)
+ * 审核报告字卡 · 第三个 Tab (悬浮球一比一复刻+双向同步+批量操作版)
  * ============================================================ */
 (function () {
     'use strict';
@@ -925,7 +925,7 @@
     const AUDIT_SECT_ID = 'cc-sect-audit';
     const STORAGE_KEY   = 'my-audit-cards';
 
-    /* ---------------- 样式注入 (复刻悬浮球风格) ---------------- */
+    /* ---------------- 样式注入 ---------------- */
     function injectStyle() {
         if (document.getElementById('my-audit-style')) return;
         const style = document.createElement('style');
@@ -935,13 +935,54 @@
 .my-audit-wrap {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     padding: 12px 4px;
     max-height: 100%;
     overflow-y: auto;
     box-sizing: border-box;
-    background: #f7f8fa; /* 悬浮球背景偏灰 */
+    background: #f7f8fa;
 }
+/* 顶部工具栏 (全选、批量操作) */
+.my-audit-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #fff;
+    border-radius: 12px;
+    font-size: 13px;
+    color: #333;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+.my-audit-toolbar label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-weight: 500;
+}
+.my-audit-toolbar .tool-btn {
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: #f4f4f5;
+    user-select: none;
+    transition: background .15s;
+}
+.my-audit-toolbar .tool-btn:hover { background: #e9e9eb; }
+.my-audit-toolbar .tool-btn.danger {
+    color: #ff4d4f;
+    background: #fff1f0;
+    border: 1px solid #ffcccc;
+}
+.my-audit-toolbar .tool-btn.danger:hover { background: #ffe4e4; }
+.my-audit-selected-count {
+    color: #999;
+    font-size: 12px;
+    margin-left: auto;
+}
+
 /* 分组卡片 */
 .my-audit-group {
     background: #fff;
@@ -961,7 +1002,7 @@
 .my-audit-group-title {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     font-size: 14px;
     font-weight: bold;
     color: #333;
@@ -986,22 +1027,12 @@
     background: #fff;
     user-select: none;
 }
-.my-audit-group-actions span:hover {
-    background: #f0f0f0;
-}
-.my-audit-group-actions span.danger {
-    color: #ff4d4f;
-    border-color: #ffcccc;
-}
-.my-audit-group-actions span.danger:hover {
-    background: #fff1f0;
-}
+.my-audit-group-actions span:hover { background: #f0f0f0; }
+.my-audit-group-actions span.danger { color: #ff4d4f; border-color: #ffcccc; }
+.my-audit-group-actions span.danger:hover { background: #fff1f0; }
 
 /* 卡片列表 */
-.my-audit-cards {
-    display: flex;
-    flex-direction: column;
-}
+.my-audit-cards { display: flex; flex-direction: column; }
 /* 单个卡片行 */
 .my-audit-card {
     display: flex;
@@ -1009,26 +1040,39 @@
     justify-content: space-between;
     padding: 10px 14px;
     border-bottom: 1px dashed #f0f0f0;
+    gap: 10px;
 }
-.my-audit-card:last-child {
-    border-bottom: none;
+.my-audit-card:last-child { border-bottom: none; }
+.my-audit-card.is-disabled .card-text { color: #ccc; text-decoration: line-through; }
+
+.card-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
 }
-.my-audit-card.is-disabled .card-text {
-    color: #ccc;
-    text-decoration: line-through;
+input[type="checkbox"] {
+    margin-top: 3px;
+    cursor: pointer;
+    width: 15px;
+    height: 15px;
+    accent-color: #ff4d4f;
 }
 .card-text {
     font-size: 14px;
     color: #333;
-    flex: 1;
-    margin-right: 10px;
     word-break: break-all;
+    line-height: 1.5;
+    flex: 1;
 }
+
 /* 卡片操作按钮 */
 .my-audit-card-actions {
     display: flex;
     gap: 6px;
     font-size: 12px;
+    flex-shrink: 0;
 }
 .my-audit-card-actions span {
     cursor: pointer;
@@ -1040,35 +1084,18 @@
     user-select: none;
     transition: all 0.15s;
 }
-.my-audit-card-actions span:hover {
-    background: #f4f4f5;
-}
-.my-audit-card-actions span.btn-send {
-    color: #ff4d4f;
-    border-color: #ffcccc;
-    background: #fff1f0;
-}
-.my-audit-card-actions span.btn-send:hover {
-    background: #ffe4e4;
-}
-.my-audit-card-actions span.btn-danger {
-    color: #ff4d4f;
-    border-color: #ffcccc;
-}
-.my-audit-card-actions span.btn-danger:hover {
-    background: #fff1f0;
-}
-.my-audit-empty {
-    text-align: center;
-    color: #999;
-    font-size: 13px;
-    padding: 40px 0;
-}
+.my-audit-card-actions span:hover { background: #f4f4f5; }
+.my-audit-card-actions span.btn-send { color: #ff4d4f; border-color: #ffcccc; background: #fff1f0; }
+.my-audit-card-actions span.btn-send:hover { background: #ffe4e4; }
+.my-audit-card-actions span.btn-danger { color: #ff4d4f; border-color: #ffcccc; }
+.my-audit-card-actions span.btn-danger:hover { background: #fff1f0; }
+
+.my-audit-empty { text-align: center; color: #999; font-size: 13px; padding: 40px 0; }
 `;
         document.head.appendChild(style);
     }
 
-    /* ---------------- 数据读写 (直连 localStorage) ---------------- */
+    /* ---------------- 数据读写与强制同步 ---------------- */
     function getStoreData() {
         try {
             let raw = localStorage.getItem(STORAGE_KEY);
@@ -1078,7 +1105,7 @@
             if (!obj.groups) obj.groups = [];
             return obj;
         } catch (e) {
-            console.error('数据读取失败', e);
+            console.error('[my-audit] 数据读取失败', e);
             return { version: 1, groups: [] };
         }
     }
@@ -1086,9 +1113,22 @@
     function saveStoreData(obj) {
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+            // 【核心修复】强制触发悬浮球内存重载，实现双向完美同步
+            if (window.__MY_AUDIT__ && typeof window.__MY_AUDIT__.reload === 'function') {
+                window.__MY_AUDIT__.reload();
+            }
         } catch (e) {
-            console.error('数据保存失败', e);
+            console.error('[my-audit] 数据保存失败', e);
         }
+    }
+
+    // 兼容原作者的多种数据结构字段
+    function getCards(g) {
+        if (Array.isArray(g.cards)) return g.cards;
+        if (Array.isArray(g.items)) return g.items;
+        if (Array.isArray(g.list)) return g.list;
+        if (Array.isArray(g)) return g;
+        return [];
     }
 
     /* ---------------- 渲染 UI ---------------- */
@@ -1106,23 +1146,34 @@
         
         let html = '<div class="my-audit-wrap">';
 
+        // --- 顶部工具栏 ---
+        html += ` <div class="my-audit-toolbar">
+            <label><input type="checkbox" id="my-audit-select-all"> 全选</label>
+            <span class="tool-btn" data-action="batch-enable">批量启用</span>
+            <span class="tool-btn" data-action="batch-disable">批量禁用</span>
+            <span class="tool-btn danger" data-action="batch-delete">批量删除</span>
+            <span class="my-audit-selected-count">已选 0 项</span>
+        </div>`;
+
         if (!groups.length) {
             html += '<div class="my-audit-empty">暂无字卡，去悬浮球里添加吧~</div>';
         } else {
             groups.forEach((g, gIdx) => {
                 const name = g.name || g.title || '未命名';
-                const cards = g.cards || g.items || g.list || [];
+                const cards = getCards(g);
                 
                 html += `<div class="my-audit-group">`;
                 // --- 分组头部 ---
                 html += `  <div class="my-audit-group-header">`;
-                html += `    <div class="my-audit-group-title">${escapeHtml(name)} <span class="my-audit-count">(${cards.length})</span></div>`;
+                html += `    <div class="my-audit-group-title">`;
+                html += `      <input type="checkbox" class="my-group-check" data-gidx="${gIdx}">`;
+                html += `      ${escapeHtml(name)} <span class="my-audit-count">(${cards.length})</span>`;
+                html += `    </div>`;
                 html += `    <div class="my-audit-group-actions">`;
                 html += `      <span data-action="rename-group" data-gidx="${gIdx}">重命名</span>`;
                 html += `      <span data-action="move-up" data-gidx="${gIdx}">↑</span>`;
                 html += `      <span data-action="move-down" data-gidx="${gIdx}">↓</span>`;
-                html += `      <span data-action="toggle-group" data-gidx="${gIdx}">开关组</span>`;
-                html += `      <span class="danger" data-action="delete-group" data-gidx="${gIdx}">删除</span>`;
+                html += `      <span class="danger" data-action="delete-group" data-gidx="${gIdx}">删除分组</span>`;
                 html += `    </div>`;
                 html += `  </div>`;
                 
@@ -1135,7 +1186,10 @@
                         const text = c.text || c.content || '';
                         const isDisabled = c.isDisabled === true || c.isDisabled === 'true';
                         html += `<div class="my-audit-card ${isDisabled ? 'is-disabled' : ''}">`;
-                        html += `  <div class="card-text">${escapeHtml(text)}</div>`;
+                        html += `  <div class="card-left">`;
+                        html += `    <input type="checkbox" class="card-checkbox" data-gidx="${gIdx}" data-cidx="${cIdx}">`;
+                        html += `    <div class="card-text">${escapeHtml(text)}</div>`;
+                        html += `  </div>`;
                         html += `  <div class="my-audit-card-actions">`;
                         html += `    <span class="btn-send" data-action="send-card" data-gidx="${gIdx}" data-cidx="${cIdx}">发送</span>`;
                         html += `    <span data-action="edit-card" data-gidx="${gIdx}" data-cidx="${cIdx}">编辑</span>`;
@@ -1159,7 +1213,51 @@
         const container = document.getElementById(AUDIT_SECT_ID);
         if (!container) return;
 
-        // 使用事件委托处理所有按钮点击
+        // 1. 监听 Checkbox 的变更
+        container.addEventListener('change', function(e) {
+            const target = e.target;
+            if (target.id === 'my-audit-select-all') {
+                const checked = target.checked;
+                container.querySelectorAll('.card-checkbox').forEach(cb => cb.checked = checked);
+                container.querySelectorAll('.my-group-check').forEach(cb => cb.checked = checked);
+                updateSelection();
+            } 
+            else if (target.classList.contains('my-group-check')) {
+                const gIdx = target.dataset.gidx;
+                const checked = target.checked;
+                container.querySelectorAll(`.card-checkbox[data-gidx="${gIdx}"]`).forEach(cb => cb.checked = checked);
+                updateSelection();
+            }
+            else if (target.classList.contains('card-checkbox')) {
+                updateSelection();
+            }
+        });
+
+        function updateSelection() {
+            const checkedBoxes = Array.from(container.querySelectorAll('.card-checkbox:checked'));
+            const countEl = container.querySelector('.my-audit-selected-count');
+            if (countEl) countEl.textContent = `已选 ${checkedBoxes.length} 项`;
+            
+            // 同步组头部的全选状态
+            const obj = getStoreData();
+            (obj.groups || []).forEach((g, gIdx) => {
+                const allGroupBoxes = container.querySelectorAll(`.card-checkbox[data-gidx="${gIdx}"]`);
+                const checkedGroupBoxes = container.querySelectorAll(`.card-checkbox[data-gidx="${gIdx}"]:checked`);
+                const groupCheck = container.querySelector(`.my-group-check[data-gidx="${gIdx}"]`);
+                if (groupCheck) {
+                    groupCheck.checked = allGroupBoxes.length > 0 && allGroupBoxes.length === checkedGroupBoxes.length;
+                }
+            });
+            
+            // 同步顶部的全选状态
+            const allBoxes = container.querySelectorAll('.card-checkbox');
+            const allCheck = container.querySelector('#my-audit-select-all');
+            if (allCheck) {
+                allCheck.checked = allBoxes.length > 0 && allBoxes.length === checkedBoxes.length;
+            }
+        }
+
+        // 2. 监听按钮点击
         container.addEventListener('click', function(e) {
             const target = e.target.closest('span[data-action]');
             if (!target) return;
@@ -1168,15 +1266,47 @@
             e.stopPropagation();
 
             const action = target.dataset.action;
-            const gIdx = parseInt(target.dataset.gidx, 10);
-            const cIdx = parseInt(target.dataset.cidx, 10);
+            const gIdx = target.dataset.gidx !== undefined ? parseInt(target.dataset.gidx, 10) : -1;
+            const cIdx = target.dataset.cidx !== undefined ? parseInt(target.dataset.cidx, 10) : -1;
             
             let obj = getStoreData();
             let groups = obj.groups;
             let changed = false;
 
-            // 1. 分组操作
-            if (action === 'rename-group') {
+            /* --- 批量操作 --- */
+            if (action.startsWith('batch-')) {
+                const checked = Array.from(container.querySelectorAll('.card-checkbox:checked'));
+                if (!checked.length) return alert('请先勾选要操作的卡片');
+
+                const toTarget = checked.map(cb => `${cb.dataset.gidx}-${cb.dataset.cidx}`);
+
+                if (action === 'batch-delete') {
+                    if (!confirm(`确定批量删除已选的 ${checked.length} 张卡片吗？`)) return;
+                    groups.forEach((g, gI) => {
+                        let cards = getCards(g);
+                        // 倒序删除，防止索引塌陷
+                        for (let i = cards.length - 1; i >= 0; i--) {
+                            if (toTarget.includes(`${gI}-${i}`)) cards.splice(i, 1);
+                        }
+                    });
+                    changed = true;
+                } 
+                else if (action === 'batch-enable' || action === 'batch-disable') {
+                    const isDisabled = action === 'batch-disable';
+                    groups.forEach((g, gI) => {
+                        let cards = getCards(g);
+                        cards.forEach((c, cI) => {
+                            if (toTarget.includes(`${gI}-${cI}`)) {
+                                c.isDisabled = isDisabled;
+                            }
+                        });
+                    });
+                    changed = true;
+                }
+            }
+            
+            /* --- 分组操作 --- */
+            else if (action === 'rename-group') {
                 const newName = prompt('输入新的分类名称：', groups[gIdx].name);
                 if (newName && newName.trim()) {
                     groups[gIdx].name = newName.trim();
@@ -1191,15 +1321,6 @@
                 [groups[gIdx + 1], groups[gIdx]] = [groups[gIdx], groups[gIdx + 1]];
                 changed = true;
             }
-            else if (action === 'toggle-group') {
-                // 如果组里有卡片，把第一张的状态反转，应用到全组
-                const cards = groups[gIdx].cards || groups[gIdx].items || groups[gIdx].list || [];
-                if (cards.length > 0) {
-                    const firstDisabled = cards[0].isDisabled === true;
-                    cards.forEach(c => c.isDisabled = !firstDisabled);
-                    changed = true;
-                }
-            }
             else if (action === 'delete-group') {
                 if (confirm(`确定要删除【${groups[gIdx].name}】及其下的所有卡片吗？`)) {
                     groups.splice(gIdx, 1);
@@ -1207,20 +1328,18 @@
                 }
             }
             
-            // 2. 卡片操作
+            /* --- 卡片操作 --- */
             else {
-                const cards = groups[gIdx].cards || groups[gIdx].items || groups[gIdx].list || [];
+                const cards = getCards(groups[gIdx]);
                 const card = cards[cIdx];
                 if (!card) return;
 
                 if (action === 'send-card') {
-                    // 尝试将内容填入聊天输入框
                     const text = card.text || card.content || '';
                     const chatInput = document.querySelector('textarea') || document.querySelector('input[type="text"]');
                     if (chatInput) {
                         chatInput.value = text;
                         chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-                        // 尝试点击发送按钮
                         const sendBtn = document.querySelector('.send-btn, .btn-send, [class*="send"]');
                         if (sendBtn) sendBtn.click();
                     } else {
@@ -1247,7 +1366,6 @@
                 }
             }
 
-            // 如果数据有变动，保存并重新渲染
             if (changed) {
                 saveStoreData(obj);
                 renderUI();
@@ -1266,37 +1384,26 @@
         });
 
         document.querySelectorAll('.cc-sect-body').forEach(s => {
-            if (s === sect) {
-                s.hidden = false;
-            } else {
-                s.hidden = true;
-            }
+            if (s === sect) s.hidden = false;
+            else s.hidden = true;
         });
 
-        // 每次切进这个 Tab，重新读取 localStorage 渲染，保证和悬浮球同步
-        renderUI();
+        renderUI(); // 每次切回来重新读取渲染，保证同步
     }
 
     function deactivateAudit() {
         const auditBtn = document.querySelector(AUDIT_BTN_SEL);
         if (auditBtn) auditBtn.classList.remove('sel');
-
         const sect = document.getElementById(AUDIT_SECT_ID);
-        if (sect) {
-            sect.hidden = true;
-        }
+        if (sect) sect.hidden = true;
     }
 
     /* ---------------- 初始化 ---------------- */
     function onClickTab(e) {
         const btn = e.target && e.target.closest && e.target.closest('.cc-tab');
         if (!btn) return;
-
-        if (btn.matches(AUDIT_BTN_SEL)) {
-            activateAudit(btn);
-        } else {
-            deactivateAudit(); 
-        }
+        if (btn.matches(AUDIT_BTN_SEL)) activateAudit(btn);
+        else deactivateAudit(); 
     }
 
     function init() {
