@@ -916,7 +916,7 @@
 
 })();
 /* ============================================================
- * 审核报告字卡 · 第三个 Tab (强化解析版)
+ * 审核报告字卡 · 第三个 Tab (完美兼容版)
  * ============================================================ */
 (function () {
     'use strict';
@@ -993,48 +993,45 @@
         document.head.appendChild(style);
     }
 
-    /* ---------------- 数据读取与规范化 (增强版) ---------------- */
-    function loadAuditGroups() {
+    /* ---------------- 数据读取与规范化 (解决 Array 问题) ---------------- */
+    function getAuditGroups() {
         try {
             let raw = localStorage.getItem(STORAGE_KEY);
-            if (!raw) {
-                console.warn('[my-audit] localStorage 中没有找到 "' + STORAGE_KEY + '" 的值！');
-                return {};
-            }
-            
+            if (!raw) return [];
             let obj = JSON.parse(raw);
             
-            // 处理可能存在的双重 JSON 序列化 (即数据被 stringify 了两次)
+            // 处理可能存在的双重 JSON 序列化
             if (typeof obj === 'string') {
                 try { obj = JSON.parse(obj); } catch(e){}
             }
-            
-            if (!obj || typeof obj !== 'object') return {};
-            
-            console.log('[my-audit] 成功读取到的数据结构:', obj);
-            
-            // 优先取 groups 字段
-            if (obj.groups && typeof obj.groups === 'object') {
-                return obj.groups;
-            }
-            // 如果没有 groups 字段，但本身就是个对象，直接返回（兼容直接存分类的情况）
-            if (!Array.isArray(obj)) {
-                return obj;
-            }
-            return {};
-        } catch (e) {
-            console.error('[my-audit] 解析 my-audit-cards 失败:', e);
-            return {};
-        }
-    }
+            if (!obj) return [];
 
-    function normalizeCards(list) {
-        if (!Array.isArray(list)) return [];
-        // 过滤掉格式不正确的、或者 isDisabled 为 true 的卡片
-        return list.filter(c =>
-            c && typeof c === 'object' &&
-            c.isDisabled !== true && c.isDisabled !== 'true'
-        );
+            let groups = obj.groups || obj; // 优先取 groups，没有则直接用 obj
+            let result = [];
+
+            if (Array.isArray(groups)) {
+                // 针对 groups 是数组的情况 (你的截图就是这个情况)
+                groups.forEach(g => {
+                    if (!g) return;
+                    let name = g.name || g.title || g.category || g.groupName || '默认分类';
+                    let list = g.cards || g.items || g.list || g.data || g;
+                    if (Array.isArray(list)) {
+                        result.push({ name, list });
+                    }
+                });
+            } else if (typeof groups === 'object') {
+                // 针对 groups 是对象 {"情话": [...]} 的情况
+                Object.keys(groups).forEach(k => {
+                    if (Array.isArray(groups[k])) {
+                        result.push({ name: k, list: groups[k] });
+                    }
+                });
+            }
+            return result;
+        } catch (e) {
+            console.error('[my-audit] 数据解析失败:', e);
+            return [];
+        }
     }
 
     /* ---------------- 渲染 ---------------- */
@@ -1044,37 +1041,34 @@
     }
 
     function renderAudit(container) {
-        const groups = loadAuditGroups();
+        const groups = getAuditGroups();
         let html = '<div class="my-audit-wrap">';
         let total = 0;
 
-        Object.keys(groups).forEach(name => {
-            const cards = normalizeCards(groups[name]);
+        groups.forEach(g => {
+            // 过滤掉 isDisabled: true 的卡片
+            const cards = g.list.filter(c => 
+                c && typeof c === 'object' && 
+                c.isDisabled !== true && c.isDisabled !== 'true'
+            );
             if (!cards.length) return;
             total += cards.length;
 
-            html += '<div class="my-audit-group">';
-            html += '  <div class="my-audit-group-title">' +
-                    escapeHtml(name) +
-                    '<span class="my-audit-count">' + cards.length + '</span>' +
-                    '</div>';
-            html += '  <div class="my-audit-cards">';
+            html += `<div class="my-audit-group">`;
+            html += `  <div class="my-audit-group-title">${escapeHtml(g.name)}<span class="my-audit-count">${cards.length}</span></div>`;
+            html += `  <div class="my-audit-cards">`;
             
             cards.forEach(card => {
-                const text = card.text != null ? card.text
-                           : card.content != null ? card.content
-                           : card.title != null ? card.title
-                           : '';
-                // 加入 chat-item 类名复用原作者样式
-                html += '<div class="chat-item my-audit-card">' + escapeHtml(text) + '</div>';
+                const text = card.text || card.content || card.title || '';
+                html += `    <div class="chat-item my-audit-card">${escapeHtml(text)}</div>`;
             });
             
-            html += '  </div>';
-            html += '</div>';
+            html += `  </div>`;
+            html += `</div>`;
         });
 
         if (!total) {
-            html = '<div class="my-audit-empty">暂无审核报告字卡<br><span style="font-size:12px;color:#aaa;">(请按 F12 查看控制台是否有数据输出)</span></div>';
+            html = '<div class="my-audit-empty">暂无审核报告字卡<br><span style="font-size:12px;color:#aaa;">(数据为空或全部被禁用)</span></div>';
         } else {
             html += '</div>';
         }
@@ -1087,48 +1081,34 @@
         const sect = document.getElementById(AUDIT_SECT_ID);
         if (!sect) return;
 
-        // 1. 隐藏其他 Tab 按钮，只高亮 audit
+        // 1. 高亮自己，取消其他 Tab 的高亮（保留其他按钮，不隐藏！）
         document.querySelectorAll('.cc-tab').forEach(btn => {
             if (btn === auditBtn) {
                 btn.classList.add('sel');
-                btn.style.display = ''; // 确保自己显示
             } else {
                 btn.classList.remove('sel');
-                if (btn.style.display !== 'none') {
-                    // 记录原始 display，恢复时还原
-                    btn.dataset.myAuditPrevDisplay = btn.style.display || '';
-                }
-                btn.style.display = 'none';
             }
         });
 
-        // 2. 隐藏其他 sect，显示 audit
+        // 2. 隐藏其他页面容器，显示当前页面容器
         document.querySelectorAll('.cc-sect-body').forEach(s => {
             if (s === sect) return;
             s.hidden = true;
-            s.style.display = 'none'; // 防原作者用 display 控制
+            s.style.display = 'none';
         });
         sect.hidden = false;
-        sect.style.display = ''; // 恢复显示
+        sect.style.display = '';
 
         // 3. 渲染数据
         renderAudit(sect);
     }
 
     function deactivateAudit() {
-        // 还原被我们隐藏的 Tab 按钮
-        document.querySelectorAll('.cc-tab').forEach(btn => {
-            if (btn.dataset && 'myAuditPrevDisplay' in btn.dataset) {
-                btn.style.display = btn.dataset.myAuditPrevDisplay || '';
-                delete btn.dataset.myAuditPrevDisplay;
-            }
-        });
-
-        // 去掉 audit 按钮的高亮
+        // 去掉自己的高亮
         const auditBtn = document.querySelector(AUDIT_BTN_SEL);
         if (auditBtn) auditBtn.classList.remove('sel');
 
-        // 隐藏 audit 容器
+        // 隐藏自己的容器
         const sect = document.getElementById(AUDIT_SECT_ID);
         if (sect) {
             sect.hidden = true;
@@ -1144,7 +1124,7 @@
         if (btn.matches(AUDIT_BTN_SEL)) {
             activateAudit(btn);
         } else {
-            deactivateAudit(); // 点击原作者按钮时收尾
+            deactivateAudit(); // 点击其他 Tab 时，自动切回并隐藏自己
         }
     }
 
@@ -1152,9 +1132,6 @@
         injectStyle();
         document.addEventListener('click', onClick, false);
     }
-
-    // 暴露重置方法备用
-    window.myAuditReset = deactivateAudit;
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
