@@ -85,7 +85,7 @@
   function findCard(cid) { try { for (var i = 0; i < DB.groups.length; i++) { var g = DB.groups[i]; for (var j = 0; j < g.cards.length; j++) if (g.cards[j].id === cid) return { group: g, card: g.cards[j] }; } } catch (e) {} return null; }
   function pushHistory(rec) { safe(function () { DB.history.push({ id: uid('h'), sender: rec.sender || SENDER_MJ, action: rec.action || 'add', text: rec.text || '', result: rec.result || 'agree', time: Date.now(), extra: rec.extra || '' }); if (DB.history.length > HISTORY_LIMIT) DB.history = DB.history.slice(-HISTORY_LIMIT); saveData(); }, 'pushHistory'); }
 
-     // 【绝对稳定】气泡注入方案 (手搓完美同步+头像形状实时联动版)
+  // 【终极完美】气泡注入方案 (尺寸/圆角/间距 完美同步版)
   function injectBubbleToChat(text) {
     var renderSuccess = false;
     try {
@@ -122,7 +122,6 @@
             try {
                 var raw = localStorage.getItem(LS_KEY);
                 var parsed = null;
-                
                 if (raw && raw !== '[object Object]' && raw !== 'undefined' && raw !== 'null') {
                     try { parsed = JSON.parse(raw); } catch(e) { parsed = null; }
                 }
@@ -149,7 +148,7 @@
             if (INJECTED_MSGS.length > 50) INJECTED_MSGS.shift();
         } catch (dataErr) {}
 
-        // ========== 2. 尝试调用原网页官方渲染 ==========
+        // ========== 2. 尝试官方渲染 ==========
         var chatBody = document.getElementById('chat-body');
         if (!chatBody) return true;
 
@@ -161,7 +160,7 @@
             } catch (e) {}
         }
 
-        // ========== 3. 智能手搓 DOM (精准偷色+形状联动) ==========
+        // ========== 3. 纯手工稳定组装 (动态尺寸对齐) ==========
         try {
             var bubbleStyle = {
                 backgroundColor: '#ffffff', color: '#333333', borderRadius: '8px', 
@@ -194,37 +193,48 @@
                 bubbleStyle.borderRadius = s.borderRadius || '8px';
                 var fs = parseInt(s.fontSize, 10);
                 if (fs > 12 && fs < 20) bubbleStyle.fontSize = s.fontSize;
-            } else {
-                var rootS = window.getComputedStyle(document.documentElement);
-                var bgVar = rootS.getPropertyValue('--msg-bg') || rootS.getPropertyValue('--bubble-bg');
-                var colorVar = rootS.getPropertyValue('--msg-color') || rootS.getPropertyValue('--bubble-color');
-                if (bgVar && bgVar.trim()) bubbleStyle.backgroundColor = bgVar.trim();
-                if (colorVar && colorVar.trim()) bubbleStyle.color = colorVar.trim();
             }
 
-            // 提取头像与圆角
-            var avatarRadius = '4px';
-            var sampleAvatar = chatBody.querySelector('img');
+            // 【核心修复】动态提取头像尺寸、圆角和间距
+            var avatarW = '38px', avatarH = '38px', avatarRadius = '4px', marginRight = '12px', leftColWidth = '48px';
+            var sampleAvatar = null;
+            var imgs = chatBody.querySelectorAll('img');
+            for (var i = 0; i < imgs.length; i++) {
+                if (imgs[i].getBoundingClientRect().left - chatBody.getBoundingClientRect().left < 100) {
+                    sampleAvatar = imgs[i];
+                    break;
+                }
+            }
             if (sampleAvatar) {
                 var sa = window.getComputedStyle(sampleAvatar);
-                if (sa.borderRadius) avatarRadius = sa.borderRadius;
+                if (sa.width && sa.width !== 'auto') avatarW = sa.width;
+                if (sa.height && sa.height !== 'auto') avatarH = sa.height;
+                if (sa.borderRadius && sa.borderRadius !== '0px') avatarRadius = sa.borderRadius;
+                
+                // 获取头像外部包裹容器的宽度和右边距
+                var parent = sampleAvatar.parentElement;
+                if (parent && parent !== chatBody) {
+                    var pStyle = window.getComputedStyle(parent);
+                    if (pStyle.width && pStyle.width !== 'auto') leftColWidth = pStyle.width;
+                    if (pStyle.marginRight && pStyle.marginRight !== '0px') marginRight = pStyle.marginRight;
+                }
             }
 
             var wrapper = document.createElement('div');
             wrapper.setAttribute('data-ma-injected', '1');
-            wrapper.style.cssText = 'display: flex; align-items: flex-start; margin-bottom: 15px; padding: 10px; width: 100%; box-sizing: border-box;';
+            // 【核心修复】去掉左右 padding，只留上下边距，让头像完美靠左对齐
+            wrapper.style.cssText = 'display: flex; align-items: flex-start; margin-bottom: 15px; padding: 10px 0; width: 100%; box-sizing: border-box;';
             
-            // 左侧列：包裹头像和时间戳
             var leftCol = document.createElement('div');
-            leftCol.style.cssText = 'display: flex; flex-direction: column; align-items: center; margin-right: 12px; flex-shrink: 0; width: 40px;';
+            leftCol.style.cssText = 'display: flex; flex-direction: column; align-items: center; margin-right: ' + marginRight + '; flex-shrink: 0; width: ' + leftColWidth + ';';
             
             var avatarEl;
             if (sampleAvatar) {
                 avatarEl = sampleAvatar.cloneNode();
-                avatarEl.style.cssText = 'width: 38px; height: 38px; border-radius: ' + avatarRadius + '; object-fit: cover;';
+                avatarEl.style.cssText = 'width: ' + avatarW + '; height: ' + avatarH + '; border-radius: ' + avatarRadius + '; object-fit: cover;';
             } else {
                 avatarEl = document.createElement('div');
-                avatarEl.style.cssText = 'width: 38px; height: 38px; border-radius: ' + avatarRadius + '; background: #ddd;';
+                avatarEl.style.cssText = 'width: ' + avatarW + '; height: ' + avatarH + '; border-radius: ' + avatarRadius + '; background: #ddd;';
             }
             
             var timeEl = document.createElement('div');
@@ -252,12 +262,11 @@
     return renderSuccess;
   }
 
-  // 【核心修复】实时监控原生气泡颜色 & 头像圆角，实现免刷新热更新
+  // 【核心修复】实时监控，推倒重绘时使用最新尺寸
   function checkAndRepairChat() {
     var chatBody = document.getElementById('chat-body');
     if (!chatBody || INJECTED_MSGS.length === 0) return;
     
-    // 1. 提取最新原生气泡和头像样式
     var bubbleStyle = {
         backgroundColor: '#ffffff', color: '#333333', borderRadius: '8px', 
         padding: '10px 14px', fontSize: '15px', lineHeight: '1.5', 
@@ -281,16 +290,25 @@
         bubbleStyle.borderRadius = s.borderRadius || '8px';
     }
 
-    var currentAvatarRadius = '4px';
+    var avatarW = '38px', avatarH = '38px', currentAvatarRadius = '4px', marginRight = '12px', leftColWidth = '48px';
     var sampleAvatar = chatBody.querySelector('img');
     if (sampleAvatar) {
         var sa = window.getComputedStyle(sampleAvatar);
-        if (sa.borderRadius) currentAvatarRadius = sa.borderRadius;
+        if (sa.width && sa.width !== 'auto') avatarW = sa.width;
+        if (sa.height && sa.height !== 'auto') avatarH = sa.height;
+        if (sa.borderRadius && sa.borderRadius !== '0px') currentAvatarRadius = sa.borderRadius;
+        
+        var parent = sampleAvatar.parentElement;
+        if (parent && parent !== chatBody) {
+            var pStyle = window.getComputedStyle(parent);
+            if (pStyle.width && pStyle.width !== 'auto') leftColWidth = pStyle.width;
+            if (pStyle.marginRight && pStyle.marginRight !== '0px') marginRight = pStyle.marginRight;
+        }
     }
 
     var injectedNodes = chatBody.querySelectorAll('[data-ma-injected="1"]');
     
-    // 2. 如果节点数量不对，推倒重来（重新渲染）
+    // 如果节点数量不对，推倒重来
     if (injectedNodes.length !== INJECTED_MSGS.length) {
         for (var i = 0; i < injectedNodes.length; i++) injectedNodes[i].remove();
         
@@ -299,19 +317,19 @@
             
             var wrapper = document.createElement('div');
             wrapper.setAttribute('data-ma-injected', '1');
-            wrapper.style.cssText = 'display: flex; align-items: flex-start; margin-bottom: 15px; padding: 10px; width: 100%; box-sizing: border-box;';
+            wrapper.style.cssText = 'display: flex; align-items: flex-start; margin-bottom: 15px; padding: 10px 0; width: 100%; box-sizing: border-box;';
             
             var avatarEl;
             if (sampleAvatar) {
                 avatarEl = sampleAvatar.cloneNode();
-                avatarEl.style.cssText = 'width: 38px; height: 38px; border-radius: ' + currentAvatarRadius + '; object-fit: cover;';
+                avatarEl.style.cssText = 'width: ' + avatarW + '; height: ' + avatarH + '; border-radius: ' + currentAvatarRadius + '; object-fit: cover;';
             } else {
                 avatarEl = document.createElement('div');
-                avatarEl.style.cssText = 'width: 38px; height: 38px; border-radius: ' + currentAvatarRadius + '; background: #ddd;';
+                avatarEl.style.cssText = 'width: ' + avatarW + '; height: ' + avatarH + '; border-radius: ' + currentAvatarRadius + '; background: #ddd;';
             }
             
             var leftCol = document.createElement('div');
-            leftCol.style.cssText = 'display: flex; flex-direction: column; align-items: center; margin-right: 12px; flex-shrink: 0; width: 40px;';
+            leftCol.style.cssText = 'display: flex; flex-direction: column; align-items: center; margin-right: ' + marginRight + '; flex-shrink: 0; width: ' + leftColWidth + ';';
             
             var timeEl = document.createElement('div');
             timeEl.style.cssText = 'font-size: 10px; color: #999; margin-top: 6px; white-space: nowrap; transform: scale(0.9);';
@@ -332,11 +350,9 @@
         }
         try { chatBody.scrollTop = chatBody.scrollHeight; } catch (e) {}
     } else {
-        // 3. 节点数量正确，执行免刷新热更新
+        // 节点数量正确，执行免刷新热更新
         for (var i = 0; i < injectedNodes.length; i++) {
             var node = injectedNodes[i];
-            
-            // 刷气泡颜色
             if (sampleBubble) {
                 var bubble = node.querySelector('.bubble, [class*="msg-content"]');
                 if (bubble) {
@@ -345,11 +361,11 @@
                     bubble.style.color = s.color;
                 }
             }
-            
-            // 刷头像形状
             var img = node.querySelector('img');
             if (img) {
                 img.style.borderRadius = currentAvatarRadius;
+                img.style.width = avatarW;
+                img.style.height = avatarH;
             }
         }
     }
