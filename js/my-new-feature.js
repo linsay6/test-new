@@ -916,7 +916,7 @@
 
 })();
 /* ============================================================
- * 审核报告字卡 · 第三个 Tab (终极单列排版修复版)
+ * 审核报告字卡 · 第三个 Tab (终极交互同步版)
  * ============================================================ */
 (function () {
     'use strict';
@@ -931,9 +931,7 @@
         const style = document.createElement('style');
         style.id = 'my-audit-style';
         style.textContent = `
-/* 强制让 hidden 生效 */
-.cc-sect-body[hidden] { display: none !important; }
-
+/* 容器样式 */
 .my-audit-wrap {
     display: flex;
     flex-direction: column;
@@ -943,14 +941,21 @@
     overflow-y: auto;
     box-sizing: border-box;
 }
+/* 分组标题 */
 .my-audit-group-title {
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: space-between;
     font-size: 14px;
     font-weight: 600;
     color: #333;
     margin-bottom: 8px;
+    padding: 0 4px;
+}
+.my-audit-group-title .title-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 .my-audit-count {
     font-size: 11px;
@@ -960,27 +965,69 @@
     padding: 1px 8px;
     border-radius: 10px;
 }
-/* 单列列表布局，贴近悬浮球样式 */
+/* 卡片列表 */
 .my-audit-cards {
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
-/* 卡片样式：白底、浅灰边、圆角 */
+/* 卡片本体 */
 .chat-item.my-audit-card {
     background: #fff;
     border: 1px solid #e8e8e8;
     border-radius: 12px;
-    padding: 14px 16px;
+    padding: 12px 14px;
     font-size: 14px;
     line-height: 1.5;
     color: #333;
-    word-break: break-word;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-    transition: background .15s ease;
+    transition: all .15s ease;
 }
-.chat-item.my-audit-card:active {
-    background: #f9f9f9;
+.chat-item.my-audit-card.is-disabled .my-audit-text {
+    color: #aaa;
+    text-decoration: line-through;
+}
+/* 卡片底部操作区 */
+.my-audit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    border-top: 1px dashed #f0f0f0;
+    padding-top: 8px;
+    margin-top: 2px;
+}
+.my-audit-act-btn {
+    font-size: 12px;
+    color: #666;
+    cursor: pointer;
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: #f5f5f5;
+    user-select: none;
+    transition: background .15s;
+}
+.my-audit-act-btn:hover {
+    background: #e8e8e8;
+}
+.my-audit-act-btn.btn-delete {
+    color: #ff4d4f;
+    background: #fff1f0;
+}
+.my-audit-act-btn.btn-delete:hover {
+    background: #ffd8d8;
+}
+.my-audit-act-btn.btn-dedup-group {
+    font-size: 12px;
+    font-weight: normal;
+    color: #4f6ef7;
+    background: #eef2ff;
+    padding: 4px 10px;
+}
+.my-audit-act-btn.btn-dedup-group:hover {
+    background: #dbe4ff;
 }
 .my-audit-empty {
     text-align: center;
@@ -992,42 +1039,48 @@
         document.head.appendChild(style);
     }
 
-    /* ---------------- 数据读取与规范化 ---------------- */
-    function getAuditGroups() {
+    /* ---------------- 数据读取与保存 ---------------- */
+    function getRawData() {
         try {
             let raw = localStorage.getItem(STORAGE_KEY);
-            if (!raw) return [];
+            if (!raw) return { groups: {} };
             let obj = JSON.parse(raw);
-            
             if (typeof obj === 'string') {
                 try { obj = JSON.parse(obj); } catch(e){}
             }
-            if (!obj) return [];
-
-            let groups = obj.groups || obj;
-            let result = [];
-
-            if (Array.isArray(groups)) {
-                groups.forEach(g => {
-                    if (!g) return;
-                    let name = g.name || g.title || g.category || g.groupName || '默认分类';
-                    let list = g.cards || g.items || g.list || g.data || g;
-                    if (Array.isArray(list)) {
-                        result.push({ name, list });
-                    }
-                });
-            } else if (typeof groups === 'object') {
-                Object.keys(groups).forEach(k => {
-                    if (Array.isArray(groups[k])) {
-                        result.push({ name: k, list: groups[k] });
-                    }
-                });
-            }
-            return result;
+            return obj || { groups: {} };
         } catch (e) {
-            console.error('[my-audit] 数据解析失败:', e);
-            return [];
+            console.error('[my-audit] 数据读取失败:', e);
+            return { groups: {} };
         }
+    }
+
+    function saveRawData(obj) {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+        } catch (e) {
+            console.error('[my-audit] 数据保存失败:', e);
+        }
+    }
+
+    function getAuditGroups(obj) {
+        if (!obj) return [];
+        let groups = obj.groups || obj;
+        let result = [];
+
+        if (Array.isArray(groups)) {
+            groups.forEach(g => {
+                if (!g) return;
+                let name = g.name || g.title || g.category || g.groupName || '默认分类';
+                let list = g.cards || g.items || g.list || g.data || g;
+                if (Array.isArray(list)) result.push({ name, list });
+            });
+        } else if (typeof groups === 'object') {
+            Object.keys(groups).forEach(k => {
+                if (Array.isArray(groups[k])) result.push({ name: k, list: groups[k] });
+            });
+        }
+        return result;
     }
 
     /* ---------------- 渲染 ---------------- */
@@ -1037,26 +1090,37 @@
     }
 
     function renderAudit(container) {
-        const groups = getAuditGroups();
+        const obj = getRawData();
+        const groups = getAuditGroups(obj);
+        
         let html = '<div class="my-audit-wrap">';
         let total = 0;
 
         groups.forEach(g => {
-            // 过滤禁用卡片
-            const cards = g.list.filter(c => 
-                c && typeof c === 'object' && 
-                c.isDisabled !== true && c.isDisabled !== 'true'
-            );
+            const cards = g.list.filter(c => c && typeof c === 'object');
             if (!cards.length) return;
             total += cards.length;
 
             html += `<div class="my-audit-group">`;
-            html += `  <div class="my-audit-group-title">${escapeHtml(g.name)}<span class="my-audit-count">${cards.length}</span></div>`;
+            // 标题与一键去重按钮
+            html += `  <div class="my-audit-group-title">`;
+            html += `    <div class="title-left">${escapeHtml(g.name)}<span class="my-audit-count">${cards.length}</span></div>`;
+            html += `    <span class="my-audit-act-btn btn-dedup-group" data-group="${escapeHtml(g.name)}">一键去重</span>`;
+            html += `  </div>`;
             html += `  <div class="my-audit-cards">`;
             
             cards.forEach(card => {
                 const text = card.text || card.content || card.title || '';
-                html += `    <div class="chat-item my-audit-card">${escapeHtml(text)}</div>`;
+                const isDisabled = card.isDisabled === true || card.isDisabled === 'true';
+                const disabledClass = isDisabled ? 'is-disabled' : '';
+                
+                html += `<div class="chat-item my-audit-card ${disabledClass}">`;
+                html += `  <div class="my-audit-text">${escapeHtml(text)}</div>`;
+                html += `  <div class="my-audit-actions">`;
+                html += `    <span class="my-audit-act-btn btn-toggle" data-id="${card.id}" data-group="${escapeHtml(g.name)}">${isDisabled ? '启用' : '禁用'}</span>`;
+                html += `    <span class="my-audit-act-btn btn-delete" data-id="${card.id}" data-group="${escapeHtml(g.name)}">删除</span>`;
+                html += `  </div>`;
+                html += `</div>`;
             });
             
             html += `  </div>`;
@@ -1064,7 +1128,7 @@
         });
 
         if (!total) {
-            html = '<div class="my-audit-empty">暂无审核报告字卡<br><span style="font-size:12px;color:#aaa;">(数据为空或全部被禁用)</span></div>';
+            html = '<div class="my-audit-empty">暂无审核报告字卡</div>';
         } else {
             html += '</div>';
         }
@@ -1072,57 +1136,111 @@
         container.innerHTML = html;
     }
 
-    /* ---------------- Tab 切换逻辑 (完美交接) ---------------- */
+    /* ---------------- 卡片操作事件（编辑、删除、去重） ---------------- */
+    function bindCardActions(container) {
+        container.addEventListener('click', function(e) {
+            const target = e.target;
+            if (!target.classList.contains('my-audit-act-btn')) return;
+            
+            e.preventDefault();
+            e.stopPropagation(); // 阻止冒泡防止干扰原作者的点击
+
+            const groupName = target.dataset.group;
+            const isDedup = target.classList.contains('btn-dedup-group');
+            const isToggle = target.classList.contains('btn-toggle');
+            const isDelete = target.classList.contains('btn-delete');
+            const id = target.dataset.id;
+            
+            const obj = getRawData();
+            
+            // 辅助函数：获取组内的列表
+            const getList = (gName) => {
+                if (Array.isArray(obj.groups)) {
+                    const g = obj.groups.find(x => (x.name || x.title) === gName);
+                    return g ? (g.cards || g.items || g.list) : null;
+                } else if (typeof obj.groups === 'object') {
+                    return obj.groups[gName];
+                } else if (typeof obj === 'object') {
+                    return obj[gName];
+                }
+                return null;
+            };
+
+            const list = getList(groupName);
+            if (!list) return;
+
+            let modified = false;
+
+            if (isDedup) {
+                // 一键去重
+                const seen = new Set();
+                const newList = list.filter(c => {
+                    const t = c.text || c.content || '';
+                    if (seen.has(t)) return false;
+                    seen.add(t);
+                    return true;
+                });
+                if (newList.length !== list.length) {
+                    list.length = 0;
+                    list.push(...newList);
+                    modified = true;
+                } else {
+                    alert('该分类下没有重复字卡');
+                }
+            } else {
+                const idx = list.findIndex(c => c.id === id);
+                if (idx !== -1) {
+                    if (isToggle) {
+                        list[idx].isDisabled = !(list[idx].isDisabled === true || list[idx].isDisabled === 'true');
+                        modified = true;
+                    } else if (isDelete) {
+                        list.splice(idx, 1);
+                        modified = true;
+                    }
+                }
+            }
+            
+            if (modified) {
+                saveRawData(obj);
+                renderAudit(container); // 重新渲染当前列表
+            }
+        });
+    }
+
+    /* ---------------- Tab 切换逻辑 (只控制 hidden，不干预原作者) ---------------- */
     function activateAudit(auditBtn) {
         const sect = document.getElementById(AUDIT_SECT_ID);
         if (!sect) return;
 
-        // 1. 改变 Tab 高亮
         document.querySelectorAll('.cc-tab').forEach(btn => {
             if (btn === auditBtn) btn.classList.add('sel');
             else btn.classList.remove('sel');
         });
 
-        // 2. 隐藏其他容器 (原作者的容器)
+        // 只通过 hidden 控制显隐，彻底放弃 display: none，让原作者自己的逻辑自己跑
         document.querySelectorAll('.cc-sect-body').forEach(s => {
-            if (s === sect) return;
-            s.hidden = true;
-            s.style.display = 'none'; // 强制隐藏
+            if (s === sect) {
+                s.hidden = false;
+            } else {
+                s.hidden = true;
+            }
         });
 
-        // 3. 显示自己的容器
-        sect.hidden = false;
-        sect.style.display = '';
-
-        // 4. 渲染数据
         renderAudit(sect);
     }
 
     function deactivateAudit() {
-        // 1. 移除自己的高亮
         const auditBtn = document.querySelector(AUDIT_BTN_SEL);
         if (auditBtn) auditBtn.classList.remove('sel');
 
-        // 2. 隐藏自己的容器
         const sect = document.getElementById(AUDIT_SECT_ID);
         if (sect) {
             sect.hidden = true;
-            sect.style.display = 'none';
+            // 不碰其他人的 hidden 状态，原作者的事件会负责展示自己
         }
-
-        // 3. 【关键修复】把原作者的容器恢复显示，不要让他们白屏！
-        document.querySelectorAll('.cc-sect-body').forEach(s => {
-            if (s.id === AUDIT_SECT_ID) return;
-            // 清空内联的 display 属性，让原作者自己的 CSS 类/JS 重新接管
-            if (s.style.display === 'none') {
-                s.style.display = '';
-            }
-            // 如果原容器本身不是 hidden，就放开限制
-            s.hidden = false;
-        });
     }
 
-    /* ---------------- 事件监听 ---------------- */
+    /* ---------------- 初始化 ---------------- */
     function onClick(e) {
         const btn = e.target && e.target.closest && e.target.closest('.cc-tab');
         if (!btn) return;
@@ -1130,14 +1248,18 @@
         if (btn.matches(AUDIT_BTN_SEL)) {
             activateAudit(btn);
         } else {
-            // 只要点击的不是自己，就恢复原作者的所有东西
-            deactivateAudit();
+            deactivateAudit(); 
         }
     }
 
     function init() {
         injectStyle();
         document.addEventListener('click', onClick, false);
+        
+        const sect = document.getElementById(AUDIT_SECT_ID);
+        if (sect) {
+            bindCardActions(sect);
+        }
     }
 
     if (document.readyState === 'loading') {
