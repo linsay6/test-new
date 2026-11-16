@@ -69,14 +69,14 @@
   function findCard(cid) { try { for (var i = 0; i < DB.groups.length; i++) { var g = DB.groups[i]; for (var j = 0; j < g.cards.length; j++) if (g.cards[j].id === cid) return { group: g, card: g.cards[j] }; } } catch (e) {} return null; }
   function pushHistory(rec) { safe(function () { DB.history.push({ id: uid('h'), sender: rec.sender || SENDER_MJ, action: rec.action || 'add', text: rec.text || '', result: rec.result || 'agree', time: Date.now(), extra: rec.extra || '' }); if (DB.history.length > HISTORY_LIMIT) DB.history = DB.history.slice(-HISTORY_LIMIT); saveData(); }, 'pushHistory'); }
 
-     // 【绝对稳定】气泡注入方案 (颜色同步+深度防丢版)
+      // 【绝对稳定】气泡注入方案 (极度保守写入+颜色精准同步)
   function injectBubbleToChat(text) {
     var renderSuccess = false;
     try {
         var now = Date.now();
         var newMsg = { side: 'in', text: text, time: now };
         
-        // ========== 1. 深度破解并安全写入数据 ==========
+        // ========== 1. 极度安全的 Store & localStorage 写入 ==========
         try {
             var cid = 'default';
             var store = null;
@@ -85,79 +85,57 @@
                 else if (window.xyStore) store = window.xyStore('xy-home-v2:' + cid);
             } catch(e) {}
 
-            // 辅助函数：从各种奇奇怪怪的对象里挖出真正的数组
-            function extractArray(obj) {
-                if (Array.isArray(obj)) return obj;
-                if (obj && typeof obj === 'object') {
-                    var keys = ['msgs', 'list', 'data', 'chat-msgs', 'items'];
-                    for (var i = 0; i < keys.length; i++) {
-                        if (Array.isArray(obj[keys[i]])) return obj[keys[i]];
-                    }
-                    for (var k in obj) {
-                        if (Array.isArray(obj[k])) return obj[k];
-                    }
-                }
-                return null;
-            }
-
-            var msgs = [];
+            var storeData = null;
+            // --- 尝试从 Store 写入 ---
             if (store && typeof store.get === 'function') {
                 try {
-                    var rawData = store.get('chat-msgs');
-                    var arr = extractArray(rawData);
-                    if (arr) msgs = arr;
-
-                    // 尝试寻找一条纯文本的对方消息作为模板，深拷贝结构
-                    if (msgs.length > 0) {
-                        var template = null;
-                        for (var i = msgs.length - 1; i >= 0; i--) {
-                            var m = msgs[i];
-                            if (m && m.side === 'in' && m.text && !m.image && !m.audio) {
-                                template = m; break;
-                            }
-                        }
-                        if (template) {
-                            newMsg = JSON.parse(JSON.stringify(template));
-                            newMsg.text = text;
-                            newMsg.time = now;
-                            if (newMsg.id) newMsg.id = 'msg_' + Date.now() + Math.random().toString(36).slice(2, 6);
-                        }
+                    storeData = store.get('chat-msgs');
+                    var targetArr = null;
+                    if (Array.isArray(storeData)) targetArr = storeData;
+                    else if (storeData && typeof storeData === 'object') {
+                        for (var k in storeData) { if (Array.isArray(storeData[k])) { targetArr = storeData[k]; break; } }
                     }
-                    msgs.push(newMsg);
-                    if (typeof store.set === 'function') store.set('chat-msgs', msgs);
-                    else if (typeof store.save === 'function') store.save('chat-msgs', msgs);
-                } catch(err) {
-                    console.warn('[审计] Store 写入失败，启用 localStorage 兜底', err);
-                }
-            } 
-            
-            // 强行往 localStorage 里塞一份，保证 F5 刷新还在
+                    if (targetArr) {
+                        targetArr.push(newMsg);
+                        if (typeof store.set === 'function') store.set('chat-msgs', storeData);
+                        else if (typeof store.save === 'function') store.save('chat-msgs', storeData);
+                    }
+                } catch(err) {}
+            }
+
+            // --- 尝试从 localStorage 安全追加 ---
             var LS_KEY = 'xy-home-v2:' + cid + ':chat-msgs';
             try {
                 var raw = localStorage.getItem(LS_KEY);
-                var lsData = raw ? JSON.parse(raw) : [];
-                var lsArr = extractArray(lsData);
-                if (!lsArr) lsArr = []; // 如果原来是对象，这里我们干脆覆盖成干净的数组
-                
-                lsArr.push(newMsg);
-                // 如果原网页的格式是个对象，我们也要包一层回去
-                if (!Array.isArray(lsData) && lsData && typeof lsData === 'object') {
-                    var placed = false;
-                    for (var k in lsData) {
-                        if (Array.isArray(lsData[k])) { lsData[k] = lsArr; placed = true; break; }
+                if (raw) {
+                    var parsed = JSON.parse(raw);
+                    if (typeof parsed === 'string') parsed = JSON.parse(parsed); // 兼容双重序列化
+
+                    var lsTarget = null;
+                    if (Array.isArray(parsed)) {
+                        lsTarget = parsed;
+                        lsTarget.push(newMsg);
+                        localStorage.setItem(LS_KEY, JSON.stringify(lsTarget));
+                    } else if (parsed && typeof parsed === 'object') {
+                        for (var k in parsed) { if (Array.isArray(parsed[k])) { lsTarget = parsed[k]; break; } }
+                        if (lsTarget) {
+                            lsTarget.push(newMsg);
+                            // 【关键】保留原有的对象结构和元数据，只把数组更新后整个存回去
+                            localStorage.setItem(LS_KEY, JSON.stringify(parsed)); 
+                        }
                     }
-                    if (!placed) lsData.list = lsArr;
-                    localStorage.setItem(LS_KEY, JSON.stringify(lsData));
                 } else {
-                    localStorage.setItem(LS_KEY, JSON.stringify(lsArr));
+                    // 如果原本就是空的，我们也不乱写，让网页自己初始化
                 }
-            } catch(e) {}
+            } catch(e) {
+                console.warn('[审计] 本地解析失败，已放弃写入，绝不覆盖原数据', e);
+            }
 
             INJECTED_MSGS.push(newMsg); 
             if (INJECTED_MSGS.length > 50) INJECTED_MSGS.shift();
         } catch (dataErr) {}
 
-        // ========== 2. 尝试调用原网页渲染接口 ==========
+        // ========== 2. 尝试调用原网页官方渲染 ==========
         var chatBody = document.getElementById('chat-body');
         if (!chatBody) return true;
 
@@ -169,9 +147,8 @@
             } catch (e) {}
         }
 
-        // ========== 3. 智能提取颜色 + 精准手搓 ==========
+        // ========== 3. 智能手搓 DOM (精准偷色) ==========
         try {
-            // 默认样式（兜底）
             var bubbleStyle = {
                 backgroundColor: '#ffffff', color: '#333333', borderRadius: '8px', 
                 padding: '10px 14px', fontSize: '15px', lineHeight: '1.5', 
@@ -179,32 +156,31 @@
                 boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'inline-block'
             };
             
-            // 智能提取：寻找页面现有的左侧（对方）纯文字气泡
+            // 【精准偷色】只找左边（对方）的文字气泡
             var sampleBubble = null;
-            var allBubbles = chatBody.querySelectorAll('.bubble, [class*="bubble"], [class*="msg-content"]');
-            for (var bIdx = allBubbles.length - 1; bIdx >= 0; bIdx--) {
-                var b = allBubbles[bIdx];
-                // 排除自己发的气泡
+            // 遍历所有带气泡特征的元素，找没有子元素且背景色不透明的
+            var allCandidates = chatBody.querySelectorAll('.bubble, [class*="bubble"], [class*="msg-content"], .text');
+            for (var bIdx = allCandidates.length - 1; bIdx >= 0; bIdx--) {
+                var b = allCandidates[bIdx];
                 var cls = (b.className || '').toLowerCase();
-                if (cls.indexOf('out') >= 0 || cls.indexOf('right') >= 0) continue;
+                if (cls.indexOf('out') >= 0 || cls.indexOf('right') >= 0) continue; // 排除自己
                 
-                // 简单判断：距离左侧较近的算作对方气泡
                 var rect = b.getBoundingClientRect();
                 var parentRect = chatBody.getBoundingClientRect();
-                if (rect.left - parentRect.left < 100) {
-                    sampleBubble = b; break;
+                var bg = window.getComputedStyle(b).backgroundColor;
+                
+                // 只要靠左边且颜色不是透明的，就拿来用
+                if (rect.left - parentRect.left < 100 && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+                    sampleBubble = b; 
+                    break;
                 }
             }
-            // 如果没找到左侧气泡，随便找个气泡偷颜色
-            if (!sampleBubble) sampleBubble = chatBody.querySelector('.bubble');
 
             if (sampleBubble) {
                 var s = window.getComputedStyle(sampleBubble);
-                // 确保不是透明或者全白（防止页面在深色模式下抓不到）
-                bubbleStyle.backgroundColor = s.backgroundColor !== 'rgba(0, 0, 0, 0)' ? s.backgroundColor : bubbleStyle.backgroundColor;
-                bubbleStyle.color = s.color !== 'rgba(0, 0, 0, 0)' ? s.color : bubbleStyle.color;
-                bubbleStyle.borderRadius = s.borderRadius;
-                
+                bubbleStyle.backgroundColor = s.backgroundColor;
+                bubbleStyle.color = s.color;
+                bubbleStyle.borderRadius = s.borderRadius || '8px';
                 var fs = parseInt(s.fontSize, 10);
                 if (fs > 12 && fs < 20) bubbleStyle.fontSize = s.fontSize;
             } else {
@@ -216,7 +192,6 @@
                 if (colorVar && colorVar.trim()) bubbleStyle.color = colorVar.trim();
             }
 
-            // 组装
             var wrapper = document.createElement('div');
             wrapper.setAttribute('data-ma-injected', '1');
             wrapper.style.cssText = 'display: flex; align-items: flex-start; margin-bottom: 15px; padding: 10px; width: 100%; box-sizing: border-box;';
@@ -256,17 +231,27 @@
     
     for (var i = 0; i < injectedNodes.length; i++) injectedNodes[i].remove();
     
-    // 提取颜色
+    // 提取颜色（与上面逻辑一致）
     var bubbleStyle = {
         backgroundColor: '#ffffff', color: '#333333', borderRadius: '8px', 
         padding: '10px 14px', fontSize: '15px', lineHeight: '1.5', 
         maxWidth: '70%', boxSizing: 'border-box', wordBreak: 'break-all', display: 'inline-block'
     };
-    var sampleBubble = chatBody.querySelector('.bubble');
+    var sampleBubble = null;
+    var allCandidates = chatBody.querySelectorAll('.bubble, [class*="bubble"], [class*="msg-content"]');
+    for (var bIdx = allCandidates.length - 1; bIdx >= 0; bIdx--) {
+        var b = allCandidates[bIdx];
+        var cls = (b.className || '').toLowerCase();
+        if (cls.indexOf('out') >= 0 || cls.indexOf('right') >= 0) continue;
+        var rect = b.getBoundingClientRect();
+        var parentRect = chatBody.getBoundingClientRect();
+        if (rect.left - parentRect.left < 100) { sampleBubble = b; break; }
+    }
     if (sampleBubble) {
         var s = window.getComputedStyle(sampleBubble);
         bubbleStyle.backgroundColor = s.backgroundColor;
         bubbleStyle.color = s.color;
+        bubbleStyle.borderRadius = s.borderRadius || '8px';
     }
 
     for (var m = 0; m < INJECTED_MSGS.length; m++) {
