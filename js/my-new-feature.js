@@ -64,12 +64,28 @@
   }
   function loadData() { return safe(function () { var raw = localStorage.getItem(LS_KEY_DATA); if (!raw) return defaultData(); return normalizeData(JSON.parse(raw)); }, 'loadData', defaultData()); }
   function saveData() { return safe(function () { localStorage.setItem(LS_KEY_DATA, JSON.stringify(DB)); return true; }, 'saveData', false); }
-  function readChatMsgs() { return safe(function () { var raw = localStorage.getItem(LS_KEY_CHAT); if (!raw) return []; var arr = JSON.parse(raw); return Array.isArray(arr) ? arr : []; }, 'readChatMsgs', []); }
+    function readChatMsgs() { 
+    return safe(function () { 
+      var raw = localStorage.getItem(LS_KEY_CHAT); 
+      // 拦截可能被写坏的脏数据
+      if (!raw || raw === '[object Object]' || raw === 'undefined' || raw === 'null') {
+          localStorage.setItem(LS_KEY_CHAT, '[]'); // 遇到坏数据直接洗白重置
+          return []; 
+      }
+      try {
+          var arr = JSON.parse(raw); 
+          return Array.isArray(arr) ? arr : []; 
+      } catch(e) {
+          localStorage.setItem(LS_KEY_CHAT, '[]'); // JSON解析失败也直接洗白
+          return [];
+      }
+    }, 'readChatMsgs', []); 
+  }
   function findGroup(gid) { try { for (var i = 0; i < DB.groups.length; i++) if (DB.groups[i].id === gid) return DB.groups[i]; } catch (e) {} return null; }
   function findCard(cid) { try { for (var i = 0; i < DB.groups.length; i++) { var g = DB.groups[i]; for (var j = 0; j < g.cards.length; j++) if (g.cards[j].id === cid) return { group: g, card: g.cards[j] }; } } catch (e) {} return null; }
   function pushHistory(rec) { safe(function () { DB.history.push({ id: uid('h'), sender: rec.sender || SENDER_MJ, action: rec.action || 'add', text: rec.text || '', result: rec.result || 'agree', time: Date.now(), extra: rec.extra || '' }); if (DB.history.length > HISTORY_LIMIT) DB.history = DB.history.slice(-HISTORY_LIMIT); saveData(); }, 'pushHistory'); }
 
-      // 【绝对稳定】气泡注入方案 (极度保守写入+颜色精准同步)
+     // 【绝对稳定】气泡注入方案 (坏数据自动洗白版)
   function injectBubbleToChat(text) {
     var renderSuccess = false;
     try {
@@ -107,10 +123,17 @@
             var LS_KEY = 'xy-home-v2:' + cid + ':chat-msgs';
             try {
                 var raw = localStorage.getItem(LS_KEY);
-                if (raw) {
-                    var parsed = JSON.parse(raw);
-                    if (typeof parsed === 'string') parsed = JSON.parse(parsed); // 兼容双重序列化
+                var parsed = null;
+                
+                // 【核心修复】拦截坏数据
+                if (raw && raw !== '[object Object]' && raw !== 'undefined' && raw !== 'null') {
+                    try { parsed = JSON.parse(raw); } catch(e) { parsed = null; }
+                }
 
+                if (!parsed) {
+                    // 如果原数据坏了或不存在，直接重建干净的数组
+                    localStorage.setItem(LS_KEY, JSON.stringify([newMsg]));
+                } else {
                     var lsTarget = null;
                     if (Array.isArray(parsed)) {
                         lsTarget = parsed;
@@ -120,16 +143,11 @@
                         for (var k in parsed) { if (Array.isArray(parsed[k])) { lsTarget = parsed[k]; break; } }
                         if (lsTarget) {
                             lsTarget.push(newMsg);
-                            // 【关键】保留原有的对象结构和元数据，只把数组更新后整个存回去
                             localStorage.setItem(LS_KEY, JSON.stringify(parsed)); 
                         }
                     }
-                } else {
-                    // 如果原本就是空的，我们也不乱写，让网页自己初始化
                 }
-            } catch(e) {
-                console.warn('[审计] 本地解析失败，已放弃写入，绝不覆盖原数据', e);
-            }
+            } catch(e) {}
 
             INJECTED_MSGS.push(newMsg); 
             if (INJECTED_MSGS.length > 50) INJECTED_MSGS.shift();
@@ -156,20 +174,15 @@
                 boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'inline-block'
             };
             
-            // 【精准偷色】只找左边（对方）的文字气泡
             var sampleBubble = null;
-            // 遍历所有带气泡特征的元素，找没有子元素且背景色不透明的
             var allCandidates = chatBody.querySelectorAll('.bubble, [class*="bubble"], [class*="msg-content"], .text');
             for (var bIdx = allCandidates.length - 1; bIdx >= 0; bIdx--) {
                 var b = allCandidates[bIdx];
                 var cls = (b.className || '').toLowerCase();
-                if (cls.indexOf('out') >= 0 || cls.indexOf('right') >= 0) continue; // 排除自己
-                
+                if (cls.indexOf('out') >= 0 || cls.indexOf('right') >= 0) continue; 
                 var rect = b.getBoundingClientRect();
                 var parentRect = chatBody.getBoundingClientRect();
                 var bg = window.getComputedStyle(b).backgroundColor;
-                
-                // 只要靠左边且颜色不是透明的，就拿来用
                 if (rect.left - parentRect.left < 100 && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
                     sampleBubble = b; 
                     break;
@@ -184,7 +197,6 @@
                 var fs = parseInt(s.fontSize, 10);
                 if (fs > 12 && fs < 20) bubbleStyle.fontSize = s.fontSize;
             } else {
-                // 终极兜底：查 CSS 变量
                 var rootS = window.getComputedStyle(document.documentElement);
                 var bgVar = rootS.getPropertyValue('--msg-bg') || rootS.getPropertyValue('--bubble-bg');
                 var colorVar = rootS.getPropertyValue('--msg-color') || rootS.getPropertyValue('--bubble-color');
@@ -231,7 +243,6 @@
     
     for (var i = 0; i < injectedNodes.length; i++) injectedNodes[i].remove();
     
-    // 提取颜色（与上面逻辑一致）
     var bubbleStyle = {
         backgroundColor: '#ffffff', color: '#333333', borderRadius: '8px', 
         padding: '10px 14px', fontSize: '15px', lineHeight: '1.5', 
@@ -282,7 +293,6 @@
     }
     try { chatBody.scrollTop = chatBody.scrollHeight; } catch (e) {}
   }
-
   function autoPendingCount() { var n = 0; try { for (var i = 0; i < DB.pending.length; i++) { var p = DB.pending[i]; if (p.status === 'pending' && p.sender === SENDER_MJ && p.action === 'add') n++; } } catch (e) {} return n; }
   function pendingCount() { var n = 0; try { for (var i = 0; i < DB.pending.length; i++) if (DB.pending[i].status === 'pending') n++; } catch (e) {} return n; }
   
