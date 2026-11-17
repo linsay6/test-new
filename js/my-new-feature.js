@@ -1209,19 +1209,39 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
         });
     }
 
-    // 监听主界面的进入 & 动态渲染
+       // 监听主界面的进入 & 动态渲染（强制夺权版）
     function initAuditTab() {
         injectStyle();
         const auditBtn = document.querySelector(AUDIT_BTN_SEL);
-        if (auditBtn) {
+        const auditContainer = document.getElementById(AUDIT_SECT_ID);
+        
+        if (auditBtn && auditContainer) {
+            // 1. 点击我们的 Tab
             auditBtn.addEventListener('click', function() {
-                setTimeout(() => {
-                    const container = document.getElementById(AUDIT_SECT_ID);
-                    if (container) {
-                        renderUI();
-                        bindEvents();
+                // 强行隐藏原生网页的其他面板
+                document.querySelectorAll('.cc-sect-body').forEach(el => {
+                    if (el.id !== AUDIT_SECT_ID) {
+                        el.setAttribute('hidden', 'true');
+                        el.style.display = 'none';
                     }
-                }, 50);
+                });
+
+                // 强行显示我们的面板
+                auditContainer.removeAttribute('hidden');
+                auditContainer.style.display = 'block';
+                
+                // 重新渲染并绑定事件
+                renderUI();
+                bindEvents();
+            });
+
+            // 2. 监听原生其他 Tab 的点击，当他们点其他 Tab 时，把我们的面板隐藏
+            const otherTabs = document.querySelectorAll('.cc-tab:not([data-ccsel="audit"])');
+            otherTabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    auditContainer.setAttribute('hidden', 'true');
+                    auditContainer.style.display = 'none';
+                });
             });
         }
     }
