@@ -1158,7 +1158,7 @@
         }, 'guard');
       }, 2000);
       window.addEventListener('resize', function () { safe(applyFabPosition, 'resize'); });
-      safe(function () {
+            safe(function () {
         if (location.href.indexOf('ma-show=1') >= 0) {
           URL_FORCE_SHOW = true;
           applyVisibility();
