@@ -665,13 +665,15 @@
       MASK.addEventListener('click', function (e) { if (e.target === MASK) closePanel(); });
       var tb = PANEL.querySelector('#ma-tabs');
       if (tb) tb.addEventListener('click', function (e) {
-        var el = e.target;
-        while (el && el !== tb && !el.getAttribute('data-tab')) el = el.parentNode;
-        if (!el || el === tb) return;
-        CURRENT_TAB = el.getAttribute('data-tab');
-        renderTabs();
-        renderPanelBody();
-      });
+    e.stopPropagation();
+    var el = e.target;
+    while (el && el !== tb && !el.getAttribute('data-tab')) el = el.parentNode;
+    if (!el || el === tb) return;
+    var tabKey = el.getAttribute('data-tab');
+    CURRENT_TAB = tabKey;
+    renderTabs();
+    renderPanelBody();
+});
       if (!document.getElementById('ma-crop-mask')) { var cm = document.createElement('div'); cm.id = 'ma-crop-mask'; ROOT.appendChild(cm); }
       if (!document.getElementById('ma-modal-mask')) { var mm = document.createElement('div'); mm.id = 'ma-modal-mask'; ROOT.appendChild(mm); }
       if (!document.getElementById('ma-toast')) { var tt = document.createElement('div'); tt.id = 'ma-toast'; ROOT.appendChild(tt); }
