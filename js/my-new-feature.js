@@ -1056,9 +1056,13 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
         container.innerHTML = html;
     }
 
-    function bindEvents() {
+       function bindEvents() {
         const container = document.getElementById(AUDIT_SECT_ID);
         if (!container) return;
+
+        // 防止重复绑定
+        if (container.dataset.bound === '1') return;
+        container.dataset.bound = '1';
 
         container.addEventListener('change', function(e) {
             const target = e.target;
@@ -1067,13 +1071,11 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
                 container.querySelectorAll('.card-checkbox').forEach(cb => cb.checked = checked);
                 container.querySelectorAll('.my-group-check').forEach(cb => cb.checked = checked);
                 updateSelection();
-            } 
-            else if (target.classList.contains('my-group-check')) {
+            } else if (target.classList.contains('my-group-check')) {
                 const gIdx = target.dataset.gidx;
                 container.querySelectorAll(`.card-checkbox[data-gidx="${gIdx}"]`).forEach(cb => cb.checked = target.checked);
                 updateSelection();
-            }
-            else if (target.classList.contains('card-checkbox')) {
+            } else if (target.classList.contains('card-checkbox')) {
                 updateSelection();
             }
         });
@@ -1102,8 +1104,9 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
             e.preventDefault(); e.stopPropagation();
 
             const action = target.dataset.action;
-            const gIdx = target.dataset.gidx !== undefined ? parseInt(target.dataset.gidx, 10) : -1;
-            const cIdx = target.dataset.cidx !== undefined ? parseInt(target.dataset.cidx, 10) : -1;
+            // 每次点击时，动态获取最新索引，防止错乱
+            const gIdx = parseInt(target.dataset.gidx, 10);
+            const cIdx = parseInt(target.dataset.cidx, 10);
             
             let obj = getStoreData();
             let groups = obj.groups;
@@ -1119,6 +1122,8 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
             if (action.startsWith('batch-') || action === 'dedup-all') {
                 const checked = Array.from(container.querySelectorAll('.card-checkbox:checked'));
                 if (action.startsWith('batch-') && !checked.length) return alert('请先勾选要操作的卡片');
+                
+                // 重新收集勾选的坐标
                 const toTarget = checked.map(cb => `${cb.dataset.gidx}-${cb.dataset.cidx}`);
 
                 if (action === 'batch-delete') {
@@ -1198,12 +1203,6 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
             if (changed) {
                 saveStoreData(obj);
                 renderUI();
-                const select = container.querySelector('#my-audit-target-group');
-                if (select) {
-                    const currentVal = select.value;
-                    select.innerHTML = '<option value="">转移目标...</option>' + groups.map((g, i) => `<option value="${i}">${escapeHtml(g.name || g.title || '未命名')}</option>`).join('');
-                    select.value = currentVal;
-                }
             }
         });
     }
