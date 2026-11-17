@@ -661,6 +661,7 @@
       PANEL.innerHTML = '<div class="ma-header"><div class="ma-title">审核中心</div><div class="ma-close" id="ma-close">×</div></div><div class="ma-tabs" id="ma-tabs">' + tabHtml + '</div><div class="ma-body" id="ma-body"></div>';
       MASK.appendChild(PANEL); ROOT.appendChild(MASK);
       var cb = PANEL.querySelector('#ma-close'); if (cb) cb.addEventListener('click', closePanel);
+      MASK.style.pointerEvents = 'none';
       MASK.addEventListener('click', function (e) { if (e.target === MASK) closePanel(); });
       var tb = PANEL.querySelector('#ma-tabs');
       if (tb) tb.addEventListener('click', function (e) {
@@ -677,8 +678,9 @@
     }, 'buildUI');
   }
   function renderTabs() { safe(function () { if (!PANEL) return; var ts = PANEL.querySelectorAll('.ma-tab'); for (var i = 0; i < ts.length; i++) { if (ts[i].getAttribute('data-tab') === CURRENT_TAB) ts[i].classList.add('on'); else ts[i].classList.remove('on'); } updateBadge(); }, 'renderTabs'); }
-  function openPanel() { safe(function () { ensureRoot(); if (!MASK) buildUI(); if (!MASK) return; MASK.classList.add('on'); PANEL_OPEN = true; renderTabs(); renderPanelBody(); updateBadge(); }, 'openPanel'); }
-  function closePanel() { safe(function () { if (MASK) MASK.classList.remove('on'); PANEL_OPEN = false; }, 'closePanel'); }
+  function openPanel() { safe(function () { ensureRoot(); if (!MASK) buildUI(); if (!MASK) return; MASK.classList.add('on'); PANEL.style.pointerEvents = 'auto'; PANEL_OPEN = true; renderTabs(); renderPanelBody(); updateBadge(); }, 'openPanel'); }
+  function closePanel() { safe(function () { if (MASK) MASK.classList.remove('on'); PANEL.style.pointerEvents = 'none'; PANEL_OPEN = false; }, 'closePanel'); }
+
 
   function renderPanelBody() {
     safe(function () {
