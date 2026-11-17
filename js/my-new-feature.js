@@ -857,21 +857,25 @@
 
   try { onReady(function () { try { bootstrap(); } catch (err) { try { injectCSS(); ensureRoot(); toast('初始化异常'); } catch (e2) {} } }); } catch (e) { try { injectCSS(); } catch (e2) {} }
 
-  // 补丁：安全绑定原生图标点击 & 暴露全局函数
+    // 补丁：安全绑定原生图标点击 & 暴露全局函数
   try {
     if (typeof openPanel === 'function') {
       window.openAuditPanel = openPanel;
     }
-    setTimeout(function() {
-      var nativeBtn = document.querySelector('.app[data-app="audit"]');
-      if (nativeBtn) {
-        nativeBtn.addEventListener('click', function(e) {
+    // 使用事件捕获，且加上编辑模式判断
+    document.addEventListener('click', function(e) {
+      const nativeBtn = e.target.closest('.app[data-app="audit"]');
+      if (!nativeBtn) return;
+      
+      // 检查是否处于排版编辑模式（原作者的类名可能是 .cc-managing 或类似）
+      const isManaging = document.body.classList.contains('cc-managing') || document.querySelector('.cc-managing') !== null;
+      
+      if (!isManaging) {
           e.preventDefault();
           e.stopPropagation();
           if (typeof openPanel === 'function') { openPanel(); } else { alert("审核面板没加载出来，请刷新重试"); }
-        });
       }
-    }, 1500);
+    }, true);
   } catch (err) { console.warn("图标绑定失败", err); }
 
 })();
