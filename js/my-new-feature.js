@@ -87,66 +87,67 @@
   function pushHistory(rec) { safe(function () { DB.history.push({ id: uid('h'), sender: rec.sender || SENDER_MJ, action: rec.action || 'add', text: rec.text || '', result: rec.result || 'agree', time: Date.now(), extra: rec.extra || '' }); if (DB.history.length > HISTORY_LIMIT) DB.history = DB.history.slice(-HISTORY_LIMIT); saveData(); }, 'pushHistory'); }
 
       // 终极无刷新气泡引擎：精准克隆原生气泡
-  function injectBubbleToChat(text) {
+    function injectBubbleToChat(text) {
+    var renderSuccess = false;
     try {
         var now = Date.now();
         var newMsg = { side: 'in', text: text, time: now };
         
-        // 1. 写入底层数据（保证刷新后原网页能读取）
-        var LS_KEY = 'xy-home-v2:default:chat-msgs';
+        // 1. 确保写入数据
         try {
-            var raw = localStorage.getItem(LS_KEY);
-            var parsed = raw ? JSON.parse(raw) : [];
-            if (Array.isArray(parsed)) {
-                parsed.push(newMsg);
-                localStorage.setItem(LS_KEY, JSON.stringify(parsed));
+            var cid = 'default';
+            var store = null;
+            try { if (window.storeFor) store = window.storeFor(cid); else if (window.xyStore) store = window.xyStore('xy-home-v2:' + cid); } catch(e) {}
+            if (store && typeof store.get === 'function') {
+                try {
+                    var storeData = store.get('chat-msgs'); var targetArr = null;
+                    if (Array.isArray(storeData)) targetArr = storeData;
+                    else if (storeData && typeof storeData === 'object') { for (var k in storeData) { if (Array.isArray(storeData[k])) { targetArr = storeData[k]; break; } } }
+                    if (targetArr) { targetArr.push(newMsg); if (typeof store.set === 'function') store.set('chat-msgs', storeData); else if (typeof store.save === 'function') store.save('chat-msgs', storeData); }
+                } catch(err) {}
             }
-        } catch(e) {}
+            var LS_KEY = 'xy-home-v2:' + cid + ':chat-msgs';
+            try {
+                var raw = localStorage.getItem(LS_KEY); var parsed = null;
+                if (raw && raw !== '[object Object]' && raw !== 'undefined' && raw !== 'null') { try { parsed = JSON.parse(raw); } catch(e) { parsed = null; } }
+                if (!parsed) { localStorage.setItem(LS_KEY, JSON.stringify([newMsg])); } else {
+                    var lsTarget = null;
+                    if (Array.isArray(parsed)) { lsTarget = parsed; lsTarget.push(newMsg); localStorage.setItem(LS_KEY, JSON.stringify(lsTarget)); } else if (parsed && typeof parsed === 'object') { for (var k in parsed) { if (Array.isArray(parsed[k])) { lsTarget = parsed[k]; break; } } if (lsTarget) { lsTarget.push(newMsg); localStorage.setItem(LS_KEY, JSON.stringify(parsed)); } }
+                }
+            } catch(e) {}
+            INJECTED_MSGS.push(newMsg); if (INJECTED_MSGS.length > 50) INJECTED_MSGS.shift();
+        } catch (dataErr) {}
 
         var chatBody = document.getElementById('chat-body');
-        if (!chatBody) return true; 
+        if (!chatBody) return true;
 
         // 2. 尝试官方渲染
         if (typeof window.renderWindow === 'function') { 
             try { window.renderWindow(false, false, true); if (typeof window.scrollToBottom === 'function') window.scrollToBottom(); return true; } catch (e) {} 
         }
 
-        // 3. 纯 DOM 克隆法（不画灰框，只偷蓝气泡）
+        // 3. 兜底：精准克隆原生纯文字气泡
         try {
-            // 寻找最近的一个对方发来的纯文字气泡（不含图片、语音等）
             var targetMsgNode = null;
             var children = Array.from(chatBody.children);
             for (var i = children.length - 1; i >= 0; i--) {
                 var node = children[i];
-                // 过滤掉自己发的
                 var cls = (node.className || '').toLowerCase();
                 if (cls.indexOf('out') >= 0 || cls.indexOf('me') >= 0) continue;
-                // 过滤掉复杂的卡片（带图片、SVG、按钮的绝对不要）
                 if (node.querySelector('img, svg, button, audio, video')) continue;
                 var txt = node.textContent || '';
                 if (txt.indexOf('语音') >= 0 || txt.indexOf('通话') >= 0 || txt.indexOf('申请') >= 0) continue;
-                
-                if (txt.trim().length > 0) {
-                    targetMsgNode = node;
-                    break;
-                }
+                if (txt.trim().length > 0) { targetMsgNode = node; break; }
             }
-
             if (targetMsgNode) {
-                // 找到了完美的原生气泡，直接克隆！
                 var clone = targetMsgNode.cloneNode(true);
                 clone.removeAttribute('id');
-                // 把里面的字全换成我们要发的
                 clone.textContent = text; 
-                
-                // 塞进去并滚动到底
                 chatBody.appendChild(clone);
                 try { chatBody.scrollTop = chatBody.scrollHeight; } catch (e) {}
                 return true;
             }
         } catch (domErr) {}
-        
-        // 如果死活找不到纯文字气泡，再退回官方数据刷新
         return true; 
     } catch (globalErr) { return false; }
   }
