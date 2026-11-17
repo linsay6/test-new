@@ -1207,35 +1207,40 @@ input[type="checkbox"] { margin-top: 3px; cursor: pointer; width: 15px; height: 
         });
     }
 
-    // 监听主界面的进入 & 动态渲染（智能接管版）
+        // 监听主界面的进入 & 动态渲染（带数据同步版）
     function initAuditTab() {
         injectStyle();
-        // 使用事件委托，统一接管这三个 Tab 的点击
+        
+        // 1. 监听 Tab 切换
         document.body.addEventListener('click', function(e) {
-            const tab = e.target.closest('.cc-tab');
+            var tab = e.target.closest('.cc-tab');
             if (!tab) return;
             
-            const target = tab.getAttribute('data-ccsel');
+            var target = tab.getAttribute('data-ccsel');
             if (!target) return;
 
-            // 1. 切换所有 Tab 的高亮状态
             document.querySelectorAll('.cc-tab').forEach(t => t.classList.remove('sel'));
             tab.classList.add('sel');
 
-            // 2. 隐藏所有面板，然后显示对应的面板
             document.querySelectorAll('.cc-sect-body').forEach(sect => {
                 sect.setAttribute('hidden', 'true');
                 sect.style.display = 'none';
             });
-            const activeSect = document.getElementById('cc-sect-' + target);
+            
+            var activeSect = document.getElementById('cc-sect-' + target);
             if (activeSect) {
                 activeSect.removeAttribute('hidden');
                 activeSect.style.display = 'block';
-                
-                // 如果是我们的审核面板，立刻渲染数据
-                if (target === 'audit') {
+                if (target === 'audit') { renderUI(); bindEvents(); }
+            }
+        });
+
+        // 2. 监听数据变化（当悬浮球删除/添加字卡时，自动刷新）
+        window.addEventListener('storage', function(e) {
+            if (e.key === STORAGE_KEY) {
+                const container = document.getElementById(AUDIT_SECT_ID);
+                if (container && container.style.display !== 'none') {
                     renderUI();
-                    bindEvents();
                 }
             }
         });
