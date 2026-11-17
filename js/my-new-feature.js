@@ -742,7 +742,7 @@
         if (rb) rb.addEventListener('click', function () { safe(function () { rejectPending(p); DB.pending = DB.pending.filter(function (x) { return x.id !== pid; }); saveData(); renderPanelBody(); updateBadge(); toast('已拒绝'); }, 'reject'); });
       });
     }, 'bindPendingEvents');
-  function approvePending(p, targetGid) {
+   function approvePending(p, targetGid) {
     if (!p) return false;
     var ok = false;
     if (p.action === 'add') {
@@ -757,36 +757,36 @@
       }
       g.cards.push({ id: uid('c'), text: p.text, disabledBy: [], createdAt: Date.now() });
       ok = true;
-      pushHistory({ sender: p.sender || SENDER_MJ, action: 'add', text: p.text, result: 'agree', extra: 'group:' + g.id });
+      pushHistory({ sender: p.sender || SENDER_MJ, action: 'add', text: p.text, result: 'agree', extra: 'group:'+g.id });
     } else if (p.action === 'delete') {
       var f1 = findCard(p.cardId);
-      if (f1) {
-        f1.group.cards = f1.group.cards.filter(function (x) { return x.id !== f1.card.id; });
+      if(f1){
+        f1.group.cards = f1.group.cards.filter(function(x){ return x.id !== f1.card.id; });
         ok = true;
-        pushHistory({ sender: p.sender || SENDER_MJ, action: 'delete', text: p.text, result: 'agree', extra: 'card:' + f1.card.id });
+        pushHistory({ sender: p.sender || SENDER_MJ, action:'delete', text:p.text, result:'agree', extra:'card:'+f1.card.id });
       }
     } else if (p.action === 'disable') {
       var f2 = findCard(p.cardId);
-      if (f2) {
-        if (f2.card.disabledBy.indexOf('mj') < 0) f2.card.disabledBy.push('mj');
+      if(f2){
+        if(f2.card.disabledBy.indexOf('mj') < 0) f2.card.disabledBy.push('mj');
         ok = true;
-        pushHistory({ sender: p.sender || SENDER_MJ, action: 'disable', text: p.text, result: 'agree', extra: 'card:' + f2.card.id });
+        pushHistory({ sender: p.sender || SENDER_MJ, action:'disable', text:p.text, result:'agree', extra:'card:'+f2.card.id });
       }
     } else if (p.action === 'enable') {
       var f3 = findCard(p.cardId);
-      if (f3) {
-        f3.card.disabledBy = f3.card.disabledBy.filter(function (x) { return x !== 'mj'; });
+      if(f3){
+        f3.card.disabledBy = f3.card.disabledBy.filter(function(x){ return x !== 'mj'; });
         ok = true;
-        pushHistory({ sender: p.sender || SENDER_MJ, action: 'enable', text: p.text, result: 'agree', extra: 'card:' + f3.card.id });
+        pushHistory({ sender: p.sender || SENDER_MJ, action:'enable', text:p.text, result:'agree', extra:'card:'+f3.card.id });
       }
     } else if (p.action === 'move') {
       var f4 = findCard(p.cardId);
       var tg = findGroup(p.toGroupId);
-      if (f4 && tg) {
-        f4.group.cards = f4.group.cards.filter(function (x) { return x.id !== f4.card.id; });
+      if(f4 && tg){
+        f4.group.cards = f4.group.cards.filter(function(x){ return x.id !== f4.card.id; });
         tg.cards.push(f4.card);
         ok = true;
-        pushHistory({ sender: p.sender || SENDER_MJ, action: 'move', text: p.text, result: 'agree', extra: 'from:' + f4.group.id + ',to:' + tg.id });
+        pushHistory({ sender: p.sender || SENDER_MJ, action:'move', text:p.text, result:'agree', extra:'from:'+f4.group.id+',to:'+tg.id });
       }
     }
     return ok;
@@ -907,8 +907,7 @@
         });
         if (btnToggle) btnToggle.addEventListener('click', function () {
           var idx = f.card.disabledBy.indexOf('user');
-          if (idx >= 0) f.card.disabledBy.splice(idx, 1);
-          else f.card.disabledBy.push('user');
+          if (idx >= 0) f.card.disabledBy.splice(idx, 1); else f.card.disabledBy.push('user');
           saveData();
           renderPanelBody();
           toast('已切换禁用状态');
@@ -964,60 +963,60 @@
     }, 'auditReportCards', []);
     if (!reportCards.length) return '<div class="ma-empty">还没有审核通过记录</div>';
     h += '<div style="display:flex;flex-direction:column;gap:8px;">';
-    for (var i = 0; i < reportCards.length; i++) {
-      var r = reportCards[i];
-      h += '<div class="ma-pending-item" style="margin-bottom:0;">';
-      h += '<div class="ma-pending-top"><span class="ma-act-tag add">' + esc(r.action || 'agree') + '</span><span class="ma-sender">来自 <b>' + esc(r.sender) + '</b> · ' + esc(fmtRelative(r.time)) + '</span></div>';
-      h += '<div class="ma-pending-text">' + esc(r.text) + '</div>';
-      h += '<div class="ma-pending-actions" style="display:flex;justify-content:flex-end;gap:8px;">';
-      h += '<button class="ma-btn sm" data-act="report-copy" data-text="' + esc(r.text) + '">复制</button>';
-      h += '<button class="ma-btn sm primary" data-act="report-send" data-text="' + esc(r.text) + '">发送到聊天</button>';
-      h += '</div></div>';
+    for(var i=0;i<reportCards.length;i++){
+        var r = reportCards[i];
+        h += '<div class="ma-pending-item" style="margin-bottom:0;">';
+        h += '<div class="ma-pending-top"><span class="ma-act-tag add">'+esc(r.action||'agree')+'</span><span class="ma-sender">来自 <b>'+esc(r.sender)+'</b> · '+esc(fmtRelative(r.time))+'</span></div>';
+        h += '<div class="ma-pending-text">'+esc(r.text)+'</div>';
+        h += '<div class="ma-pending-actions" style="display:flex;justify-content:flex-end;gap:8px;">';
+        h += '<button class="ma-btn sm" data-act="report-copy" data-text="'+esc(r.text)+'">复制</button>';
+        h += '<button class="ma-btn sm primary" data-act="report-send" data-text="'+esc(r.text)+'">发送到聊天</button>';
+        h += '</div></div>';
     }
     h += '</div>';
     return h;
   }
 
   function bindAuditReportEvents(body) {
-    safe(function () {
-      var btnAdd = body.querySelector('#ma-audit-add');
-      if (btnAdd) {
-        btnAdd.addEventListener('click', function () {
-          var text = prompt('输入审核报告字卡内容：');
-          if (!text) return;
-          text = text.trim();
-          if (!text) return;
-          pushHistory({ sender: SENDER_ME, action: 'manual', text: text, result: 'agree', extra: 'audit-report' });
-          toast('已新增到报告库');
-          renderPanelBody();
+    safe(function(){
+        var btnAdd = body.querySelector('#ma-audit-add');
+        if(btnAdd){
+            btnAdd.addEventListener('click',function(){
+                var text = prompt('输入审核报告字卡内容：');
+                if(!text) return;
+                text = text.trim();
+                if(!text) return;
+                pushHistory({ sender:SENDER_ME, action:'manual', text:text, result:'agree', extra:'audit-report' });
+                toast('已新增到报告库');
+                renderPanelBody();
+            });
+        }
+        eachNode(body,'[data-act="report-copy"]',function(btn){
+            btn.addEventListener('click',function(){
+                var text = btn.getAttribute('data-text');
+                safe(function(){
+                    if(navigator.clipboard && navigator.clipboard.writeText){
+                        navigator.clipboard.writeText(text).then(function(){toast('已复制');});
+                    }else{
+                        var ta = document.createElement('textarea');
+                        ta.value = text;
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                        toast('已复制');
+                    }
+                },'copy');
+            });
         });
-      }
-      eachNode(body, '[data-act="report-copy"]', function (btn) {
-        btn.addEventListener('click', function () {
-          var text = btn.getAttribute('data-text');
-          safe(function () {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              navigator.clipboard.writeText(text).then(function () { toast('已复制'); });
-            } else {
-              var ta = document.createElement('textarea');
-              ta.value = text;
-              document.body.appendChild(ta);
-              ta.select();
-              document.execCommand('copy');
-              document.body.removeChild(ta);
-              toast('已复制');
-            }
-          }, 'copy');
+        eachNode(body,'[data-act="report-send"]',function(btn){
+            btn.addEventListener('click',function(){
+                var text = btn.getAttribute('data-text');
+                var ok = injectBubbleToChat(text);
+                toast(ok?'发送成功':'发送失败');
+            });
         });
-      });
-      eachNode(body, '[data-act="report-send"]', function (btn) {
-        btn.addEventListener('click', function () {
-          var text = btn.getAttribute('data-text');
-          var ok = injectBubbleToChat(text);
-          toast(ok ? '发送成功' : '发送失败');
-        });
-      });
-    }, 'bindAuditReportEvents');
+    },'bindAuditReportEvents');
   }
 
   function renderHistoryTab() {
@@ -1175,3 +1174,4 @@
     startGuard();
   }
 })();
+
