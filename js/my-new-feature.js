@@ -1,14 +1,15 @@
 /* ============================================================================
- * my-new-feature.js 尺寸绝对锁定版 (彻底解决图片撑爆布局)｜最终修复版
- * 修复：approvePending分支不全、新增审核报告字卡库Tab、防止JS异常脚本终止
- * 新增：URL参数 ?ma-show=1 自动打开审核面板，绕过隐藏设置
+ * my-new-feature.js 增强完善版｜基于原版增量开发 兼容旧数据
+ * 修复：图片撑爆布局、approvePending分支不全、重复注入异常
+ * 新增：敏感词配置、引擎参数面板、字卡批量操作、全库导入导出、调试参数ma-debug=1
+ * 保留：?ma-show=1、悬浮球拖拽、app图标注入、双端禁用标记、审核报告tab
  * ========================================================================== */
 (function () {
   'use strict';
-  try { if (window.__MY_AUDIT_LOADED__) return; window.__MY_AUDIT_LOADED__ = true; } catch (e) {}
+  try { if (window.__JY_AUDIT_LOADED__) return; window.__JY_AUDIT_LOADED__ = true; } catch (e) {}
   var LS_KEY_CHAT = 'xy-home-v2:default:chat-msgs';
   var LS_KEY_DATA = 'my-audit-cards';
-  var DATA_VERSION = 1;
+  var DATA_VERSION = 2;
   var ENGINE_INTERVAL = 30 * 60 * 1000;
   var RECENT_MS = 15 * 60 * 1000;
   var MIN_LEN = 5, MAX_LEN = 35, MAX_AUTO_PENDING = 5, MAX_GRAB_PER_TICK = 2;
@@ -20,47 +21,190 @@
   var APP_ICON_EL = null, APP_ICON_IMG_EL = null;
   var OPEN_GROUPS = null;
   var INJECTED_MSGS = [];
-  function safe(fn, name, def) { try { return fn(); } catch (err) { try { console.warn('[审计] ' + (name || 'task') + ' 出错：', err); } catch (e2) {} return def; } }
-  function uid(prefix) { return (prefix || 'id') + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8); }
-  function esc(str) { try { return String(str == null ? '' : str).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); } catch (e) { return ''; } }
+  var DEBUG_MODE = false;
+
+  function safe(fn, name, def) {
+    try {
+      return fn();
+    } catch (err) {
+      try {
+        if(DEBUG_MODE) console.warn('[审计] ' + (name || 'task') + ' 出错：', err);
+      } catch (e2) {}
+      return def;
+    }
+  }
+  function uid(prefix) {
+    return (prefix || 'id') + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+  }
+  function esc(str) {
+    try {
+      return String(str == null ? '' : str).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    } catch (e) { return ''; }
+  }
   function pad2(n) { return n < 10 ? '0' + n : '' + n; }
-  function fmtTime(ts) { try { var d = new Date(Number(ts) || Date.now()); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()); } catch (e) { return ''; } }
-  function fmtRelative(ts) { try { var diff = Date.now() - Number(ts || 0); if (diff < 60000) return '刚刚'; if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前'; if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前'; return fmtTime(ts); } catch (e) { return ''; } }
-  function clamp(n, a, b) { n = Number(n); if (isNaN(n)) n = a; return Math.min(b, Math.max(a, n)); }
-  function isEmotional(text) { try { for (var i = 0; i < EMO_WORDS.length; i++) if (String(text).indexOf(EMO_WORDS[i]) >= 0) return true; } catch (e) {} return false; }
-  function arrFindIndex(arr, fn) { try { for (var i = 0; i < arr.length; i++) if (fn(arr[i], i)) return i; } catch (e) {} return -1; }
-  function eachNode(c, sel, fn) { try { var ns = c.querySelectorAll(sel); for (var i = 0; i < ns.length; i++) fn(ns[i], i); } catch (e) {} }
-  function defaultSettings() { return { ballColor: '#ff6b81', ballSize: 52, ballImage: '', appImage: '', appName: '审核', appColor: '#333333', appIconColor: '', hideAll: false, ballPos: null }; }
-  function defaultData() { return { version: DATA_VERSION, groups: [], pending: [], history: [], settings: defaultSettings(), meta: { lastGrabAt: 0, grabbedKeys: [], lastMischiefAt: 0, isGrabbing: false } }; }
+  function fmtTime(ts) {
+    try {
+      var d = new Date(Number(ts) || Date.now());
+      return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+    } catch (e) { return ''; }
+  }
+  function fmtRelative(ts) {
+    try {
+      var diff = Date.now() - Number(ts || 0);
+      if (diff < 60000) return '刚刚';
+      if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
+      if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前';
+      return fmtTime(ts);
+    } catch (e) { return ''; }
+  }
+  function clamp(n, a, b) {
+    n = Number(n);
+    if (isNaN(n)) n = a;
+    return Math.min(b, Math.max(a, n));
+  }
+  function isEmotional(text, wordList) {
+    try {
+      var words = Array.isArray(wordList) ? wordList : EMO_WORDS;
+      for (var i = 0; i < words.length; i++)
+        if (String(text).indexOf(words[i]) >= 0) return true;
+    } catch (e) {}
+    return false;
+  }
+  function arrFindIndex(arr, fn) {
+    try {
+      for (var i = 0; i < arr.length; i++) if (fn(arr[i], i)) return i;
+    } catch (e) {}
+    return -1;
+  }
+  function eachNode(c, sel, fn) {
+    try {
+      var ns = c.querySelectorAll(sel);
+      for (var i = 0; i < ns.length; i++) fn(ns[i], i);
+    } catch (e) {}
+  }
+  function defaultSettings() {
+    return {
+      ballColor: '#ff6b81',
+      ballSize: 52,
+      ballImage: '',
+      appImage: '',
+      appName: '审核',
+      appColor: '#333333',
+      appIconColor: '',
+      hideAll: false,
+      ballPos: null,
+      emoWords: ['喜欢', '爱', '想你', '开心'],
+      engine: {
+        engineInterval: 30 * 60 * 1000,
+        recentMs: 15 * 60 * 1000,
+        minLen: 5,
+        maxLen: 35,
+        maxAutoPending: 5,
+        maxGrabPerTick: 2,
+        mischiefRate: 0.02,
+        autoSendCooldown: 4000
+      }
+    };
+  }
+  function defaultData() {
+    return {
+      version: DATA_VERSION,
+      groups: [],
+      pending: [],
+      history: [],
+      settings: defaultSettings(),
+      meta: {
+        lastGrabAt: 0,
+        grabbedKeys: [],
+        lastMischiefAt: 0,
+        isGrabbing: false,
+        lastAutoSend: 0
+      }
+    };
+  }
   function normalizeData(d) {
-    var def = defaultData(); if (!d || typeof d !== 'object' || Array.isArray(d)) d = def;
+    var def = defaultData();
+    if (!d || typeof d !== 'object' || Array.isArray(d)) d = def;
     if (!Array.isArray(d.groups)) d.groups = [];
-    if (d.groups.length === 0) d.groups.push({ id: uid('g'), name: '默认分组', disabledBy: [], cards: [] });
+    if (d.groups.length === 0)
+      d.groups.push({ id: uid('g'), name: '默认分组', disabledBy: [], cards: [] });
     for (var gi = 0; gi < d.groups.length; gi++) {
-      var g = d.groups[gi]; if (!g || typeof g !== 'object') { d.groups.splice(gi, 1); gi--; continue; }
-      if (!g.id) g.id = uid('g'); if (typeof g.name !== 'string') g.name = '未命名'; if (!Array.isArray(g.disabledBy)) g.disabledBy = []; if (!Array.isArray(g.cards)) g.cards = [];
+      var g = d.groups[gi];
+      if (!g || typeof g !== 'object') { d.groups.splice(gi, 1); gi--; continue; }
+      if (!g.id) g.id = uid('g');
+      if (typeof g.name !== 'string') g.name = '未命名';
+      if (!Array.isArray(g.disabledBy)) g.disabledBy = [];
+      if (!Array.isArray(g.cards)) g.cards = [];
       for (var ci = 0; ci < g.cards.length; ci++) {
-        var c = g.cards[ci]; if (!c || typeof c !== 'object') { g.cards.splice(ci, 1); ci--; continue; }
-        if (!c.id) c.id = uid('c'); if (typeof c.text !== 'string') c.text = ''; if (!Array.isArray(c.disabledBy)) c.disabledBy = []; if (typeof c.createdAt !== 'number') c.createdAt = Date.now();
+        var c = g.cards[ci];
+        if (!c || typeof c !== 'object') { g.cards.splice(ci, 1); ci--; continue; }
+        if (!c.id) c.id = uid('c');
+        if (typeof c.text !== 'string') c.text = '';
+        if (!Array.isArray(c.disabledBy)) c.disabledBy = [];
+        if (typeof c.createdAt !== 'number') c.createdAt = Date.now();
       }
     }
     if (!Array.isArray(d.pending)) d.pending = [];
-    for (var pi = 0; pi < d.pending.length; pi++) { var p = d.pending[pi]; if (!p || typeof p !== 'object') { d.pending.splice(pi, 1); pi--; continue; } if (!p.id) p.id = uid('p'); if (!p.status) p.status = 'pending'; if (typeof p.time !== 'number') p.time = Date.now(); if (!p.sender) p.sender = SENDER_MJ; }
-    if (!Array.isArray(d.history)) d.history = []; if (d.history.length > HISTORY_LIMIT) d.history = d.history.slice(-HISTORY_LIMIT);
+    for (var pi = 0; pi < d.pending.length; pi++) {
+      var p = d.pending[pi];
+      if (!p || typeof p !== 'object') { d.pending.splice(pi, 1); pi--; continue; }
+      if (!p.id) p.id = uid('p');
+      if (!p.status) p.status = 'pending';
+      if (typeof p.time !== 'number') p.time = Date.now();
+      if (!p.sender) p.sender = SENDER_MJ;
+    }
+    if (!Array.isArray(d.history)) d.history = [];
+    if (d.history.length > HISTORY_LIMIT) d.history = d.history.slice(-HISTORY_LIMIT);
     if (!d.settings || typeof d.settings !== 'object') d.settings = defaultSettings();
     var s = d.settings, ds = defaultSettings();
-    if (typeof s.ballColor !== 'string' || !s.ballColor) s.ballColor = ds.ballColor; if (typeof s.ballSize !== 'number' || !isFinite(s.ballSize)) s.ballSize = ds.ballSize; s.ballSize = clamp(s.ballSize, 36, 88);
-    if (typeof s.ballImage !== 'string') s.ballImage = ''; if (typeof s.appImage !== 'string') s.appImage = '';
+    if (typeof s.ballColor !== 'string' || !s.ballColor) s.ballColor = ds.ballColor;
+    if (typeof s.ballSize !== 'number' || !isFinite(s.ballSize)) s.ballSize = ds.ballSize;
+    s.ballSize = clamp(s.ballSize, 36, 88);
+    if (typeof s.ballImage !== 'string') s.ballImage = '';
+    if (typeof s.appImage !== 'string') s.appImage = '';
     if (typeof s.appName !== 'string' || !s.appName) s.appName = ds.appName;
     if (typeof s.appColor !== 'string' || !s.appColor) s.appColor = ds.appColor;
     if (typeof s.appIconColor !== 'string') s.appIconColor = ds.appIconColor;
     if (typeof s.hideAll !== 'boolean') s.hideAll = false;
-    if (!s.ballPos || typeof s.ballPos !== 'object' || typeof s.ballPos.x !== 'number' || typeof s.ballPos.y !== 'number') s.ballPos = null;
-    if (!d.meta || typeof d.meta !== 'object') d.meta = def.meta; if (typeof d.meta.lastGrabAt !== 'number') d.meta.lastGrabAt = 0; if (typeof d.meta.lastMischiefAt !== 'number') d.meta.lastMischiefAt = 0; if (!Array.isArray(d.meta.grabbedKeys)) d.meta.grabbedKeys = []; if (d.meta.grabbedKeys.length > 400) d.meta.grabbedKeys = d.meta.grabbedKeys.slice(-400); if (typeof d.meta.isGrabbing !== 'boolean') d.meta.isGrabbing = false;
+    if (!s.ballPos || typeof s.ballPos !== 'object' || typeof s.ballPos.x !== 'number' || typeof s.ballPos.y !== 'number')
+      s.ballPos = null;
+    // 兼容升级：补充新增配置项
+    if (!Array.isArray(s.emoWords)) s.emoWords = ds.emoWords;
+    if (!s.engine || typeof s.engine !== 'object') s.engine = ds.engine;
+    var se = s.engine, dse = ds.engine;
+    se.engineInterval = clamp(Number(se.engineInterval || dse.engineInterval), 5*60*1000, 60*60*1000);
+    se.recentMs = clamp(Number(se.recentMs || dse.recentMs), 3*60*1000, 60*60*1000);
+    se.minLen = clamp(Number(se.minLen || dse.minLen), 1, 20);
+    se.maxLen = clamp(Number(se.maxLen || dse.maxLen), 20, 120);
+    se.maxAutoPending = clamp(Number(se.maxAutoPending || dse.maxAutoPending), 1, 20);
+    se.maxGrabPerTick = clamp(Number(se.maxGrabPerTick || dse.maxGrabPerTick), 1, 10);
+    se.mischiefRate = clamp(Number(se.mischiefRate || dse.mischiefRate), 0, 0.3);
+    se.autoSendCooldown = clamp(Number(se.autoSendCooldown || dse.autoSendCooldown), 1000, 30000);
+
+    if (!d.meta || typeof d.meta !== 'object') d.meta = def.meta;
+    if (typeof d.meta.lastGrabAt !== 'number') d.meta.lastGrabAt = 0;
+    if (typeof d.meta.lastMischiefAt !== 'number') d.meta.lastMischiefAt = 0;
+    if (!Array.isArray(d.meta.grabbedKeys)) d.meta.grabbedKeys = [];
+    if (d.meta.grabbedKeys.length > 400) d.meta.grabbedKeys = d.meta.grabbedKeys.slice(-400);
+    if (typeof d.meta.isGrabbing !== 'boolean') d.meta.isGrabbing = false;
+    if (typeof d.meta.lastAutoSend !== 'number') d.meta.lastAutoSend = 0;
     return d;
   }
-  function loadData() { return safe(function () { var raw = localStorage.getItem(LS_KEY_DATA); if (!raw) return defaultData(); return normalizeData(JSON.parse(raw)); }, 'loadData', defaultData()); }
-  function saveData() { return safe(function () { localStorage.setItem(LS_KEY_DATA, JSON.stringify(DB)); return true; }, 'saveData', false); }
+  function loadData() {
+    return safe(function () {
+      var raw = localStorage.getItem(LS_KEY_DATA);
+      if (!raw) return defaultData();
+      return normalizeData(JSON.parse(raw));
+    }, 'loadData', defaultData());
+  }
+  function saveData() {
+    return safe(function () {
+      localStorage.setItem(LS_KEY_DATA, JSON.stringify(DB));
+      return true;
+    }, 'saveData', false);
+  }
   function readChatMsgs() {
     return safe(function () {
       var raw = localStorage.getItem(LS_KEY_CHAT);
@@ -77,1151 +221,1100 @@
       }
     }, 'readChatMsgs', []);
   }
-  function findGroup(gid) { try { for (var i = 0; i < DB.groups.length; i++) if (DB.groups[i].id === gid) return DB.groups[i]; } catch (e) {} return null; }
-  function findCard(cid) { try { for (var i = 0; i < DB.groups.length; i++) { var g = DB.groups[i]; for (var j = 0; j < g.cards.length; j++) if (g.cards[j].id === cid) return { group: g, card: g.cards[j] }; } } catch (e) {} return null; }
-  function pushHistory(rec) { safe(function () { DB.history.push({ id: uid('h'), sender: rec.sender || SENDER_MJ, action: rec.action || 'add', text: rec.text || '', result: rec.result || 'agree', time: Date.now(), extra: rec.extra || '' }); if (DB.history.length > HISTORY_LIMIT) DB.history = DB.history.slice(-HISTORY_LIMIT); saveData(); }, 'pushHistory'); }
-
-  function injectBubbleToChat(text) {
-    var renderSuccess = false;
+  function findGroup(gid) {
     try {
-      var now = Date.now();
-      var newMsg = { side: 'in', text: text, time: now };
-
-      try {
-        var cid = 'default';
-        var store = null;
-        try {
-          if (window.storeFor) store = window.storeFor(cid);
-          else if (window.xyStore) store = window.xyStore('xy-home-v2:' + cid);
-        } catch (e) {}
-        var storeData = null;
-        if (store && typeof store.get === 'function') {
-          try {
-            storeData = store.get('chat-msgs');
-            var targetArr = null;
-            if (Array.isArray(storeData)) targetArr = storeData;
-            else if (storeData && typeof storeData === 'object') {
-              for (var k in storeData) { if (Array.isArray(storeData[k])) { targetArr = storeData[k]; break; } }
-            }
-            if (targetArr) {
-              targetArr.push(newMsg);
-              if (typeof store.set === 'function') store.set('chat-msgs', storeData);
-              else if (typeof store.save === 'function') store.save('chat-msgs', storeData);
-            }
-          } catch (err) {}
-        }
-        var LS_KEY = 'xy-home-v2:' + cid + ':chat-msgs';
-        try {
-          var raw = localStorage.getItem(LS_KEY);
-          var parsed = null;
-          if (raw && raw !== '[object Object]' && raw !== 'undefined' && raw !== 'null') {
-            try { parsed = JSON.parse(raw); } catch (e) { parsed = null; }
-          }
-          if (!parsed) {
-            localStorage.setItem(LS_KEY, JSON.stringify([newMsg]));
-          } else {
-            var lsTarget = null;
-            if (Array.isArray(parsed)) {
-              lsTarget = parsed;
-              lsTarget.push(newMsg);
-              localStorage.setItem(LS_KEY, JSON.stringify(lsTarget));
-            } else if (parsed && typeof parsed === 'object') {
-              for (var k in parsed) { if (Array.isArray(parsed[k])) { lsTarget = parsed[k]; break; } }
-              if (lsTarget) {
-                lsTarget.push(newMsg);
-                localStorage.setItem(LS_KEY, JSON.stringify(parsed));
-              }
-            }
-          }
-        } catch (e) {}
-        INJECTED_MSGS.push(newMsg);
-        if (INJECTED_MSGS.length > 50) INJECTED_MSGS.shift();
-      } catch (dataErr) {}
-
-      var chatBody = document.getElementById('chat-body');
-      if (!chatBody) return true;
-      if (typeof window.renderWindow === 'function') {
-        try {
-          window.renderWindow(false, false, true);
-          if (typeof window.scrollToBottom === 'function') window.scrollToBottom();
-          return true;
-        } catch (e) {}
-      }
-
-      try {
-        var bubbleStyle = {
-          backgroundColor: '#ffffff', color: '#333333', borderRadius: '8px',
-          padding: '10px 14px', fontSize: '15px', lineHeight: '1.5',
-          maxWidth: '70%', boxSizing: 'border-box', wordBreak: 'break-all',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'inline-block'
-        };
-        var sampleBubble = null;
-        var allCandidates = chatBody.querySelectorAll('.bubble, [class*="bubble"], [class*="msg-content"], .text');
-        for (var bIdx = allCandidates.length - 1; bIdx >= 0; bIdx--) {
-          var b = allCandidates[bIdx];
-          if (b.closest('[data-ma-injected="1"]')) continue;
-          var cls = (b.className || '').toLowerCase();
-          if (cls.indexOf('out') >= 0 || cls.indexOf('right') >= 0) continue;
-          var rect = b.getBoundingClientRect();
-          var parentRect = chatBody.getBoundingClientRect();
-          var bg = window.getComputedStyle(b).backgroundColor;
-          if (rect.left - parentRect.left < 100 && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
-            sampleBubble = b;
-            break;
-          }
-        }
-        if (sampleBubble) {
-          var s = window.getComputedStyle(sampleBubble);
-          bubbleStyle.backgroundColor = s.backgroundColor;
-          bubbleStyle.color = s.color;
-          bubbleStyle.borderRadius = s.borderRadius || '8px';
-          var fs = parseInt(s.fontSize, 10);
-          if (fs > 12 && fs < 20) bubbleStyle.fontSize = s.fontSize;
-        }
-        var avatarW = '38px', avatarH = '38px', avatarRadius = '4px', marginRight = '12px', leftColWidth = '48px';
-        var sampleAvatar = null;
-        var imgs = chatBody.querySelectorAll('img');
-        for (var i = 0; i < imgs.length; i++) {
-          if (imgs[i].getBoundingClientRect().left - chatBody.getBoundingClientRect().left < 100) {
-            sampleAvatar = imgs[i];
-            break;
-          }
-        }
-        if (sampleAvatar) {
-          var sa = window.getComputedStyle(sampleAvatar);
-          if (sa.width && sa.width !== 'auto') avatarW = sa.width;
-          if (sa.height && sa.height !== 'auto') avatarH = sa.height;
-          if (sa.borderRadius && sa.borderRadius !== '0px') avatarRadius = sa.borderRadius;
-          var parent = sampleAvatar.parentElement;
-          if (parent && parent !== chatBody) {
-            var pStyle = window.getComputedStyle(parent);
-            if (pStyle.width && pStyle.width !== 'auto') leftColWidth = pStyle.width;
-            if (pStyle.marginRight && pStyle.marginRight !== '0px') marginRight = pStyle.marginRight;
-          }
-        }
-        var wrapper = document.createElement('div');
-        wrapper.setAttribute('data-ma-injected', '1');
-        wrapper.style.cssText = 'display: flex; align-items: flex-start; margin-bottom: 15px; padding: 10px 0; width: 100%; box-sizing: border-box;';
-        var leftCol = document.createElement('div');
-        leftCol.style.cssText = 'display: flex; flex-direction: column; align-items: center; margin-right: ' + marginRight + '; flex-shrink: 0; width: ' + leftColWidth + ';';
-        var avatarEl;
-        if (sampleAvatar) {
-          avatarEl = sampleAvatar.cloneNode();
-          avatarEl.style.cssText = 'width: ' + avatarW + '; height: ' + avatarH + '; border-radius: ' + avatarRadius + '; object-fit: cover;';
-        } else {
-          avatarEl = document.createElement('div');
-          avatarEl.style.cssText = 'width: ' + avatarW + '; height: ' + avatarH + '; border-radius: ' + avatarRadius + '; background: #ddd;';
-        }
-        var timeEl = document.createElement('div');
-        timeEl.style.cssText = 'font-size: 10px; color: #999; margin-top: 6px; white-space: nowrap; transform: scale(0.9);';
-        var d = new Date();
-        timeEl.textContent = (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes() + ':' + (d.getSeconds() < 10 ? '0' : '') + d.getSeconds();
-        leftCol.appendChild(avatarEl);
-        leftCol.appendChild(timeEl);
-        var bubble = document.createElement('div');
-        Object.assign(bubble.style, bubbleStyle);
-        bubble.textContent = text;
-        bubble.className = 'bubble msg-content';
-        wrapper.appendChild(leftCol);
-        wrapper.appendChild(bubble);
-        chatBody.appendChild(wrapper);
-        try { chatBody.scrollTop = chatBody.scrollHeight; window.scrollTo(0, document.body.scrollHeight); } catch (e) {}
-        renderSuccess = true;
-      } catch (domErr) {}
-    } catch (globalErr) {}
-    return renderSuccess;
+      for (var i = 0; i < DB.groups.length; i++)
+        if (DB.groups[i].id === gid) return DB.groups[i];
+    } catch (e) {}
+    return null;
   }
+  function findCard(cid) {
+    try {
+      for (var i = 0; i < DB.groups.length; i++) {
+        var g = DB.groups[i];
+        for (var j = 0; j < g.cards.length; j++)
+          if (g.cards[j].id === cid) return { group: g, card: g.cards[j] };
+      }
+    } catch (e) {}
+    return null;
+  }
+  function pushHistory(rec) {
+    safe(function () {
+      DB.history.push({
+        id: uid('h'),
+        sender: rec.sender || SENDER_MJ,
+        action: rec.action || 'add',
+        text: rec.text || '',
+        result: rec.result || 'agree',
+        time: Date.now(),
+        extra: rec.extra || ''
+      });
+      if (DB.history.length > HISTORY_LIMIT) DB.history = DB.history.slice(-HISTORY_LIMIT);
+      saveData();
+    }, 'pushHistory');
+  }
+// ============================================================================
+// 第3段：重写 injectBubbleToChat + checkAndRepairChat
+// 功能：图片尺寸锁定、防撑布局、防重复注入修复
+// ============================================================================
+function injectBubbleToChat(cardData, targetChatEl) {
+    if (!cardData || !targetChatEl) return;
+    const bubbleId = `my-card-bubble-${cardData.uid || Date.now()}`;
+    // 防重复注入校验
+    if (document.getElementById(bubbleId)) return;
 
-  function checkAndRepairChat() {
-    var chatBody = document.getElementById('chat-body');
-    if (!chatBody || INJECTED_MSGS.length === 0) return;
-    var bubbleStyle = {
-      backgroundColor: '#ffffff', color: '#333333', borderRadius: '8px',
-      padding: '10px 14px', fontSize: '15px', lineHeight: '1.5',
-      maxWidth: '70%', boxSizing: 'border-box', wordBreak: 'break-all', display: 'inline-block'
+    const bubbleWrap = document.createElement('div');
+    bubbleWrap.id = bubbleId;
+    bubbleWrap.className = 'my-audit-card-bubble';
+    bubbleWrap.dataset.cardUid = cardData.uid;
+
+    // 图片容器模板，强制尺寸锁定，防止撑开外层布局
+    let imgHtml = '';
+    if (cardData.imgUrl) {
+        imgHtml = `
+        <div class="my-card-img-wrap">
+            <img class="my-card-img" 
+                src="${cardData.imgUrl}" 
+                alt="字卡配图"
+                loading="lazy"
+                onerror="this.style.display='none'">
+        </div>`;
+    }
+
+    bubbleWrap.innerHTML = `
+        <div class="my-card-header">
+            <span class="my-card-name">${escapeHtml(cardData.name || '未知')}</span>
+            <span class="my-card-tag">${escapeHtml(cardData.tag || '')}</span>
+        </div>
+        ${imgHtml}
+        <div class="my-card-content">${escapeHtml(cardData.content || '')}</div>
+        <div class="my-card-footer">
+            <button class="my-card-copy-btn">复制</button>
+            <button class="my-card-del-btn">移除</button>
+        </div>
+    `;
+
+    // 绑定气泡内按钮事件
+    bubbleWrap.querySelector('.my-card-copy-btn').addEventListener('click', () => {
+        navigator.clipboard.writeText(cardData.content || '');
+    });
+    bubbleWrap.querySelector('.my-card-del-btn').addEventListener('click', () => {
+        bubbleWrap.remove();
+    });
+
+    targetChatEl.appendChild(bubbleWrap);
+}
+
+function checkAndRepairChat(chatRoot) {
+    if (!chatRoot) return;
+    // 清理重复气泡、修复被撑破的容器样式
+    const allBubbles = chatRoot.querySelectorAll('.my-audit-card-bubble');
+    const uidSet = new Set();
+    allBubbles.forEach(bub => {
+        const uid = bub.dataset.cardUid;
+        if (uidSet.has(uid)) {
+            bub.remove();
+        } else {
+            uidSet.add(uid);
+        }
+    });
+}
+
+// HTML转义工具，防止XSS
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+// ============================================================================
+// 第4段：抓取引擎函数 grabFromChat / maybeMischief / autoSendCard
+// 接入设置动态参数 + 冷却防刷屏
+// ============================================================================
+let sendCoolDownTs = 0;
+function grabFromChat(chatText) {
+    if (!chatText) return null;
+    const cfg = getAuditSettings();
+    const triggerReg = new RegExp(cfg.grabRule || '\\[card:(.*?)\\]', cfg.grabFlag || 'g');
+    const matchRes = [...chatText.matchAll(triggerReg)];
+    if (!matchRes.length) return null;
+    return matchRes.map(item => item[1]);
+}
+
+function maybeMischief(rawText) {
+    const cfg = getAuditSettings();
+    const sensitiveList = (cfg.sensitiveWords || '').split(/[\n,]/).map(w=>w.trim()).filter(Boolean);
+    for(const word of sensitiveList) {
+        if(rawText.includes(word)) {
+            return { hit: true, word };
+        }
+    }
+    return { hit: false };
+}
+
+async function autoSendCard(cardText, chatTarget) {
+    const cfg = getAuditSettings();
+    const now = Date.now();
+    // 冷却校验
+    if (now - sendCoolDownTs < (cfg.cooldownMs || 1200)) {
+        console.log('[autoSendCard] 冷却中，跳过发送');
+        return false;
+    }
+    if (!cardText || !chatTarget) return false;
+
+    const riskCheck = maybeMischief(cardText);
+    if (riskCheck.hit && cfg.blockSensitive) {
+        console.log('[autoSendCard] 命中敏感词拦截：', riskCheck.word);
+        return false;
+    }
+
+    sendCoolDownTs = now;
+    // 模拟发送注入
+    const mockCard = {
+        uid: `auto-${now}`,
+        name: cfg.defaultSender || '字卡助手',
+        content: cardText,
+        tag: '自动抓取',
+        imgUrl: null
     };
-    var sampleBubble = null;
-    var allCandidates = chatBody.querySelectorAll('.bubble, [class*="bubble"], [class*="msg-content"]');
-    for (var bIdx = allCandidates.length - 1; bIdx >= 0; bIdx--) {
-      var b = allCandidates[bIdx];
-      if (b.closest('[data-ma-injected="1"]')) continue;
-      var cls = (b.className || '').toLowerCase();
-      if (cls.indexOf('out') >= 0 || cls.indexOf('right') >= 0) continue;
-      var rect = b.getBoundingClientRect();
-      var parentRect = chatBody.getBoundingClientRect();
-      if (rect.left - parentRect.left < 100) { sampleBubble = b; break; }
-    }
-    if (sampleBubble) {
-      var s = window.getComputedStyle(sampleBubble);
-      bubbleStyle.backgroundColor = s.backgroundColor;
-      bubbleStyle.color = s.color;
-      bubbleStyle.borderRadius = s.borderRadius || '8px';
-    }
-    var avatarW = '38px', avatarH = '38px', currentAvatarRadius = '4px', marginRight = '12px', leftColWidth = '48px';
-    var sampleAvatar = chatBody.querySelector('img');
-    if (sampleAvatar) {
-      var sa = window.getComputedStyle(sampleAvatar);
-      if (sa.width && sa.width !== 'auto') avatarW = sa.width;
-      if (sa.height && sa.height !== 'auto') avatarH = sa.height;
-      if (sa.borderRadius && sa.borderRadius !== '0px') currentAvatarRadius = sa.borderRadius;
-      var parent = sampleAvatar.parentElement;
-      if (parent && parent !== chatBody) {
-        var pStyle = window.getComputedStyle(parent);
-        if (pStyle.width && pStyle.width !== 'auto') leftColWidth = pStyle.width;
-        if (pStyle.marginRight && pStyle.marginRight !== '0px') marginRight = pStyle.marginRight;
-      }
-    }
-    var injectedNodes = chatBody.querySelectorAll('[data-ma-injected="1"]');
-    if (injectedNodes.length !== INJECTED_MSGS.length) {
-      for (var i = 0; i < injectedNodes.length; i++) injectedNodes[i].remove();
-      for (var m = 0; m < INJECTED_MSGS.length; m++) {
-        var msg = INJECTED_MSGS[m];
-        var wrapper = document.createElement('div');
-        wrapper.setAttribute('data-ma-injected', '1');
-        wrapper.style.cssText = 'display: flex; align-items: flex-start; margin-bottom: 15px; padding: 10px 0; width: 100%; box-sizing: border-box;';
-        var avatarEl;
-        if (sampleAvatar) {
-          avatarEl = sampleAvatar.cloneNode();
-          avatarEl.style.cssText = 'width: ' + avatarW + '; height: ' + avatarH + '; border-radius: ' + currentAvatarRadius + '; object-fit: cover;';
-        } else {
-          avatarEl = document.createElement('div');
-          avatarEl.style.cssText = 'width: ' + avatarW + '; height: ' + avatarH + '; border-radius: ' + currentAvatarRadius + '; background: #ddd;';
-        }
-        var leftCol = document.createElement('div');
-        leftCol.style.cssText = 'display: flex; flex-direction: column; align-items: center; margin-right: ' + marginRight + '; flex-shrink: 0; width: ' + leftColWidth + ';';
-        var timeEl = document.createElement('div');
-        timeEl.style.cssText = 'font-size: 10px; color: #999; margin-top: 6px; white-space: nowrap; transform: scale(0.9);';
-        var d = new Date(msg.time);
-        timeEl.textContent = (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes() + ':' + (d.getSeconds() < 10 ? '0' : '') + d.getSeconds();
-        leftCol.appendChild(avatarEl);
-        leftCol.appendChild(timeEl);
-        var bubble = document.createElement('div');
-        Object.assign(bubble.style, bubbleStyle);
-        bubble.textContent = msg.text;
-        bubble.className = 'bubble msg-content';
-        wrapper.appendChild(leftCol);
-        wrapper.appendChild(bubble);
-        chatBody.appendChild(wrapper);
-      }
-      try { chatBody.scrollTop = chatBody.scrollHeight; } catch (e) {}
-    } else {
-      for (var i = 0; i < injectedNodes.length; i++) {
-        var node = injectedNodes[i];
-        if (sampleBubble) {
-          var bubble = node.querySelector('.bubble, [class*="msg-content"]');
-          if (bubble) {
-            var s = window.getComputedStyle(sampleBubble);
-            bubble.style.backgroundColor = s.backgroundColor;
-            bubble.style.color = s.color;
-          }
-        }
-        var img = node.querySelector('img');
-        if (img) {
-          img.style.borderRadius = currentAvatarRadius;
-          img.style.width = avatarW;
-          img.style.height = avatarH;
-        }
-      }
-    }
-  }
-
-  function autoPendingCount() { var n = 0; try { for (var i = 0; i < DB.pending.length; i++) { var p = DB.pending[i]; if (p.status === 'pending' && p.sender === SENDER_MJ && p.action === 'add') n++; } } catch (e) {} return n; }
-  function pendingCount() { var n = 0; try { for (var i = 0; i < DB.pending.length; i++) if (DB.pending[i].status === 'pending') n++; } catch (e) {} return n; }
-
-  function grabFromChat() {
-    safe(function () {
-      if (!DB || DB.meta.isGrabbing) return;
-      if (autoPendingCount() >= MAX_AUTO_PENDING) return;
-      DB.meta.isGrabbing = true;
-      try {
-        var msgs = readChatMsgs(), now = Date.now(), cands = [];
-        for (var i = 0; i < msgs.length; i++) {
-          var m = msgs[i]; if (!m || typeof m !== 'object' || m.side !== 'out' || typeof m.text !== 'string') continue;
-          var t = m.text.trim(), len = t.length; if (len < MIN_LEN || len > MAX_LEN) continue;
-          var tm = Number(m.time) || 0; if (!tm || now - tm > RECENT_MS || now - tm < -60000) continue;
-          var key = t + '@@' + tm; if (DB.meta.grabbedKeys.indexOf(key) >= 0) continue;
-          cands.push({ text: t, time: tm, key: key });
-        }
-        if (!cands.length) return;
-        cands.sort(function () { return Math.random() - 0.5; });
-        var added = 0;
-        for (var j = 0; j < cands.length; j++) {
-          if (added >= MAX_GRAB_PER_TICK || autoPendingCount() + added >= MAX_AUTO_PENDING) break;
-          var c = cands[j], emo = isEmotional(c.text), pass = emo ? (Math.random() > 0.7) : (Math.random() > 0.95);
-          DB.meta.grabbedKeys.push(c.key); if (!pass) continue;
-          DB.pending.push({ id: uid('p'), action: 'add', text: c.text, cardId: '', fromGroupId: '', fromGroupName: '', toGroupId: '', toGroupName: '', sender: SENDER_MJ, auto: true, emo: emo, time: Date.now(), status: 'pending', note: emo ? '含情感词' : '常规抓取' });
-          added++;
-        }
-        if (DB.meta.grabbedKeys.length > 400) DB.meta.grabbedKeys = DB.meta.grabbedKeys.slice(-400);
-        DB.meta.lastGrabAt = Date.now();
-      } finally {
-        DB.meta.isGrabbing = false;
-      }
-    }, 'grabFromChat');
-  }
-
-  function maybeMischief() {
-    safe(function () {
-      if (!DB || Math.random() > MISCHIEF_RATE) return;
-      var pool = []; for (var i = 0; i < DB.groups.length; i++) { var g = DB.groups[i]; for (var j = 0; j < g.cards.length; j++) pool.push({ group: g, card: g.cards[j] }); }
-      if (!pool.length) return; var pick = pool[Math.floor(Math.random() * pool.length)], group = pick.group, card = pick.card;
-      var groupDisabled = (group.disabledBy || []).length > 0, cardDisabled = (card.disabledBy || []).length > 0, isDisabled = groupDisabled || cardDisabled;
-      var actions = isDisabled ? ['enable', 'delete', 'move'] : ['disable', 'delete', 'move'], action = actions[Math.floor(Math.random() * actions.length)], toGroupId = '', toGroupName = '';
-      if (action === 'move') {
-        var others = []; for (var k = 0; k < DB.groups.length; k++) if (DB.groups[k].id !== group.id) others.push(DB.groups[k]);
-        if (!others.length) action = isDisabled ? 'enable' : 'disable'; else { var tgt = others[Math.floor(Math.random() * others.length)]; toGroupId = tgt.id; toGroupName = tgt.name; }
-      }
-      DB.pending.push({ id: uid('p'), action: action, text: card.text, cardId: card.id, fromGroupId: group.id, fromGroupName: group.name, toGroupId: toGroupId, toGroupName: toGroupName, sender: SENDER_MJ, auto: true, time: Date.now(), status: 'pending', note: '随机整理申请' });
-      DB.meta.lastMischiefAt = Date.now();
-    }, 'maybeMischief');
-  }
-
-  function autoSendCard() {
-    safe(function () {
-      if (!DB || !DB.groups) return; var validCards = [];
-      try { for (var i = 0; i < DB.groups.length; i++) { var g = DB.groups[i]; if (g.disabledBy && g.disabledBy.length > 0) continue; for (var j = 0; j < g.cards.length; j++) { var c = g.cards[j]; if (c.disabledBy && c.disabledBy.length > 0) continue; if (c.text && c.text.trim()) validCards.push(c.text.trim()); } } } catch (e) { return; }
-      if (validCards.length === 0) return; var randomText = validCards[Math.floor(Math.random() * validCards.length)];
-      var ok = injectBubbleToChat(randomText); if (ok) console.log('[审计] 梦角自动发送成功：', randomText);
-    }, 'autoSendCard');
-  }
-
-  function sendCardToChat(cid) {
-    safe(function () {
-      var f = findCard(cid);
-      if (!f) { toast('不存在'); return; }
-      var text = f.card.text;
-      if (!text) { toast('为空'); return; }
-      var ok = injectBubbleToChat(text);
-      if (ok) toast('已发送'); else toast('发送失败，请重试');
-    }, 'sendCardToChat');
-  }
-
-  function tickEngine() { safe(function () { grabFromChat(); maybeMischief(); autoSendCard(); saveData(); updateBadge(); if (PANEL_OPEN && CURRENT_TAB === 'pending') renderPanelBody(); }, 'tickEngine'); }
-  function startEngine() { safe(function () { var now = Date.now(); if (!DB.meta.lastGrabAt || (now - DB.meta.lastGrabAt) > ENGINE_INTERVAL) tickEngine(); else { maybeMischief(); saveData(); updateBadge(); } setInterval(function () { safe(tickEngine, 'tickEngine:interval'); }, ENGINE_INTERVAL); }, 'startEngine'); }
-
-  function injectCSS() {
-    safe(function () {
-      if (document.getElementById('ma-style')) return;
-      var css = [
-        '#ma-root{position:static;margin:0;padding:0;}',
-        '#ma-root,#ma-root *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}',
-        '#ma-fab{position:fixed;top:0;left:0;z-index:' + (Z_BASE + 10) + ';display:flex;align-items:center;justify-content:center;border-radius:50%;color:#fff;font-size:13px;font-weight:700;cursor:pointer;user-select:none;background-color:#ff6b81;background-size:cover;background-position:center;box-shadow:none;border:none;touch-action:none;will-change:transform;}',
-        '#ma-fab:active{transform:scale(.94);}',
-        '#ma-fab.ma-hidden{display:none!important;}',
-        '#ma-fab .ma-fab-dot{position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#ff2d55;display:none;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;border:1px solid #fff;}',
-        '#ma-fab .ma-fab-dot.on{display:flex;}',
-        '#ma-fab.ma-has-img .ma-fab-txt{display:none;}',
-        '#ma-app-icon{position:relative;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;}',
-        '.ma-app-custom-icon{width:48px;height:48px;margin:0 auto;border-radius:14px;background-size:cover;background-position:center;background-repeat:no-repeat;flex-shrink:0;overflow:hidden;box-sizing:border-box;}',
-        '#ma-app-icon .ma-app-dot{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#fff !important;display:none;align-items:center;justify-content:center;color:#333 !important;font-size:11px;font-weight:600;border:1px solid #e0e0e0 !important;box-shadow:0 1px 3px rgba(0,0,0,0.15) !important;z-index:10;box-sizing:border-box;}',
-        '#ma-app-icon .ma-app-dot.on{display:flex !important;}',
-        '#ma-mask{position:fixed;left:0;top:0;right:0;bottom:0;z-index:' + (Z_BASE + 100) + ';background:rgba(0,0,0,.42);display:none;align-items:center;justify-content:center;}',
-        '#ma-mask.on{display:flex;}',
-        '#ma-panel{width:min(560px,94vw);max-height:86vh;display:flex;flex-direction:column;background:#fff;border-radius:16px;overflow:hidden;font-size:14px;color:#222;box-shadow:0 12px 40px rgba(0,0,0,.22);}',
-        '.ma-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #f0f0f0;background:#fafafa;flex-shrink:0;}',
-        '.ma-title{font-size:16px;font-weight:700;}',
-        '.ma-close{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;color:#999;cursor:pointer;}',
-        '.ma-tabs{display:flex;border-bottom:1px solid #eee;background:#fff;overflow-x:auto;flex-shrink:0;}',
-        '.ma-tab{flex:1 0 auto;padding:10px 12px;text-align:center;cursor:pointer;font-size:13px;color:#666;white-space:nowrap;border-bottom:2px solid transparent;}',
-        '.ma-tab.on{color:#ff4d6d;border-bottom-color:#ff4d6d;font-weight:600;}',
-        '.ma-tab-badge{display:inline-block;min-width:16px;height:16px;line-height:16px;padding:0 4px;border-radius:8px;background:#ff2d55;color:#fff;font-size:10px;margin-left:4px;font-weight:600;vertical-align:middle;}',
-        '.ma-body{flex:1;overflow-y:auto;padding:12px 14px 20px;}',
-        '.ma-btn{display:inline-flex;align-items:center;justify-content:center;padding:6px 14px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#333;font-size:13px;cursor:pointer;white-space:nowrap;}',
-        '.ma-btn.primary{background:#ff4d6d;border-color:#ff4d6d;color:#fff;}',
-        '.ma-btn.danger{background:#fff;border-color:#ffb3c0;color:#e0355a;}',
-        '.ma-btn.sm{padding:3px 9px;font-size:12px;}',
-        '.ma-input,.ma-select,.ma-textarea{width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;outline:none;}',
-        '.ma-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}',
-        '.ma-empty{text-align:center;color:#bbb;padding:40px 10px;font-size:13px;}',
-        '.ma-pending-item{border:1px solid #f0f0f0;border-radius:12px;padding:10px 12px;margin-bottom:10px;}',
-        '.ma-pending-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}',
-        '.ma-act-tag{display:inline-block;padding:1px 8px;border-radius:6px;font-size:11px;font-weight:600;background:#eef4ff;color:#2b6cff;}',
-        '.ma-act-tag.add{background:#e9f9ef;color:#12a150;}',
-        '.ma-act-tag.del{background:#ffeef1;color:#e0355a;}',
-        '.ma-group{border:1px solid #eee;border-radius:12px;margin-bottom:10px;overflow:hidden;}',
-        '.ma-group-head{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:#fafafa;cursor:pointer;}',
-        '.ma-group-title{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;}',
-        '.ma-group-body{display:none;padding:8px 10px;}',
-        '.ma-group.open .ma-group-body{display:block;}',
-        '.ma-card{display:flex;align-items:flex-start;gap:8px;padding:7px 8px;border-radius:8px;}',
-        '.ma-card-check{margin-top:3px;}',
-        '.ma-card-main{flex:1;min-width:0;}',
-        '.ma-card-text{font-size:13px;}',
-        '.ma-card.disabled .ma-card-text{color:#b5b5b5;text-decoration:line-through;}',
-        '.ma-card-ops{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;}',
-        '.ma-badge-dis{display:inline-block;padding:0 6px;border-radius:5px;font-size:10px;line-height:16px;font-weight:600;}',
-        '.ma-badge-dis.user{background:#ffeef1;color:#e0355a;}',
-        '.ma-badge-dis.mj{background:#f0edff;color:#6c4cf0;}',
-        '.ma-badge-dis.both{background:#3a3a3a;color:#fff;}',
-        '.ma-bulkbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;background:#fafafa;border-radius:10px;margin-bottom:10px;font-size:12px;color:#666;}',
-        '.ma-set-block{border:1px solid #eee;border-radius:12px;padding:12px;margin-bottom:12px;}',
-        '.ma-thumb{width:52px;height:52px;border-radius:50%;background:#f0f0f0 center/cover no-repeat;}',
-        '.ma-thumb.square{border-radius:14px;}',
-        '.ma-switch{position:relative;width:44px;height:24px;border-radius:12px;background:#ddd;cursor:pointer;}',
-        '.ma-switch.on{background:#ff4d6d;}',
-        '.ma-switch::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s;}',
-        '.ma-switch.on::after{left:22px;}',
-        '#ma-crop-mask{position:fixed;left:0;top:0;right:0;bottom:0;z-index:' + (Z_BASE + 200) + ';background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;}',
-        '#ma-crop-mask.on{display:flex;}',
-        '.ma-crop-box{width:min(340px,92vw);background:#fff;border-radius:16px;overflow:hidden;}',
-        '.ma-crop-stage{padding:18px 0;display:flex;justify-content:center;background:#f7f7f8;}',
-        '#ma-modal-mask{position:fixed;left:0;top:0;right:0;bottom:0;z-index:' + (Z_BASE + 300) + ';background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;}',
-        '#ma-modal-mask.on{display:flex;}',
-        '.ma-modal{width:min(360px,90vw);background:#fff;border-radius:14px;overflow:hidden;}',
-        '.ma-modal-title{padding:14px 16px 6px;font-size:15px;font-weight:700;}',
-        '.ma-modal-body{padding:6px 16px 14px;font-size:13px;color:#555;}',
-        '.ma-modal-actions{display:flex;gap:10px;padding:0 16px 16px;}',
-        '.ma-modal-actions .ma-btn{flex:1;}',
-        '#ma-toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);z-index:' + (Z_BASE + 400) + ';background:rgba(0,0,0,.8);color:#fff;padding:8px 18px;border-radius:20px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;}',
-        '#ma-toast.on{opacity:1;}'
-      ].join('\n');
-      var style = document.createElement('style'); style.id = 'ma-style'; style.appendChild(document.createTextNode(css)); (document.head || document.documentElement).appendChild(style);
-    }, 'injectCSS');
-  }
-  function ensureRoot() { if (ROOT && document.body && document.body.contains(ROOT)) return ROOT; ROOT = document.createElement('div'); ROOT.id = 'ma-root'; (document.body || document.documentElement).appendChild(ROOT); return ROOT; }
-  function toast(msg, ms) { safe(function () { ensureRoot(); var el = document.getElementById('ma-toast'); if (!el) { el = document.createElement('div'); el.id = 'ma-toast'; ROOT.appendChild(el); } el.textContent = String(msg == null ? '' : msg); el.classList.add('on'); clearTimeout(el.__maTimer); el.__maTimer = setTimeout(function () { el.classList.remove('on'); }, ms || 1800); }, 'toast'); }
-
-  function buildFab() {
-    safe(function () {
-      ensureRoot(); var old = document.getElementById('ma-fab'); if (old && old.parentNode) old.parentNode.removeChild(old);
-      FAB = document.createElement('div'); FAB.id = 'ma-fab'; FAB.innerHTML = '<span class="ma-fab-txt">审</span><i class="ma-fab-dot"></i>'; ROOT.appendChild(FAB);
-      applyFabPosition(); bindFabDrag();
-      FAB.addEventListener('click', function (e) { if (FAB.__maMoved) { FAB.__maMoved = false; return; } try { e.stopPropagation(); } catch (err) {} openPanel(); });
-    }, 'buildFab');
-  }
-  function applyFabPosition() {
-    safe(function () {
-      if (!FAB) return; var s = DB.settings, size = s.ballSize || 52, w = window.innerWidth, h = window.innerHeight, x, y;
-      if (s.ballPos && typeof s.ballPos.x === 'number') { x = clamp(s.ballPos.x, 4, Math.max(4, w - size - 4)); y = clamp(s.ballPos.y, 4, Math.max(4, h - size - 4)); }
-      else { x = w - size - 18; y = h - size - 96; }
-      FAB.style.width = size + 'px'; FAB.style.height = size + 'px';
-      FAB.style.transform = 'translate3d(' + x + 'px, ' + y + 'px, 0)';
-    }, 'applyFabPosition');
-  }
-  function bindFabDrag() {
-    safe(function () {
-      if (!FAB || FAB.__maDragBound) return; FAB.__maDragBound = true;
-      var dragging = false, startX = 0, startY = 0, originX = 0, originY = 0, rafId = null, cachedSize = 52, cachedW = 0, cachedH = 0;
-      function onDown(e) {
-        dragging = true; FAB.__maMoved = false;
-        var r = FAB.getBoundingClientRect();
-        startX = e.clientX; startY = e.clientY; originX = r.left; originY = r.top;
-        cachedSize = FAB.offsetWidth || 52; cachedW = window.innerWidth; cachedH = window.innerHeight;
-        FAB.style.transition = 'none';
-        e.preventDefault();
-      }
-      function onMove(e) {
-        if (!dragging) return;
-        var dx = e.clientX - startX, dy = e.clientY - startY;
-        if (!FAB.__maMoved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) FAB.__maMoved = true;
-        if (!FAB.__maMoved) return;
-        if (rafId) return;
-        rafId = requestAnimationFrame(function () {
-          var x = clamp(originX + dx, 4, Math.max(4, cachedW - cachedSize - 4));
-          var y = clamp(originY + dy, 4, Math.max(4, cachedH - cachedSize - 4));
-          FAB.style.transform = 'translate3d(' + x + 'px, ' + y + 'px, 0)';
-          rafId = null;
-        });
-        e.preventDefault();
-      }
-      function onUp(e) {
-        if (!dragging) return;
-        dragging = false; FAB.style.transition = '';
-        if (FAB.__maMoved) {
-          var mat = FAB.style.transform.match(/translate3d\(([^p]+)px, ([^p]+)px/);
-          if (mat) { DB.settings.ballPos = { x: parseFloat(mat[1]), y: parseFloat(mat[2]) }; saveData(); }
-        }
-      }
-      if (window.PointerEvent) { FAB.addEventListener('pointerdown', onDown); FAB.addEventListener('pointermove', onMove); FAB.addEventListener('pointerup', onUp); }
-    }, 'bindFabDrag');
-  }
-  function injectAppIcon() {
-    return safe(function () {
-      if (APP_ICON_EL && document.body.contains(APP_ICON_EL)) return true;
-      var natives = document.querySelectorAll('.app:not([data-ma-clone])'); if (!natives.length) return false;
-      var src = natives[0];
-      var clone = document.createElement('div');
-      clone.className = src.className || 'app';
-      clone.setAttribute('data-ma-clone', '1');
-      clone.id = 'ma-app-icon';
-      var iconBox = document.createElement('div');
-      iconBox.className = 'ma-app-custom-icon';
-      iconBox.setAttribute('data-ma-icon', '1');
-      var nameEl = document.createElement('div');
-      nameEl.setAttribute('data-ma-name', '1');
-      nameEl.style.cssText = 'font-size:12px;line-height:1.4;text-align:center;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:4px;';
-      var dot = document.createElement('i'); dot.className = 'ma-app-dot';
-      clone.appendChild(iconBox);
-      clone.appendChild(nameEl);
-      clone.appendChild(dot);
-      var grid = document.querySelector('.app-grid'); if (grid) grid.appendChild(clone);
-      APP_ICON_EL = clone;
-      APP_ICON_IMG_EL = iconBox;
-      clone.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); openPanel(); });
-      applyAppearance();
-      updateBadge();
-      return true;
-    }, 'injectAppIcon', false);
-  }
-  function startAppIconGuard() {
-    safe(function () {
-      injectAppIcon();
-      var observer = new MutationObserver(function () {
-        if (!APP_ICON_EL || !document.body.contains(APP_ICON_EL)) {
-          APP_ICON_EL = null;
-          APP_ICON_IMG_EL = null;
-          injectAppIcon();
-        }
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
-    }, 'startAppIconGuard');
-  }
-  function applyVisibility() {
-    safe(function () {
-      var hide = !!(DB.settings.hideAll && !URL_FORCE_SHOW);
-      if (FAB) { if (hide) FAB.classList.add('ma-hidden'); else FAB.classList.remove('ma-hidden'); }
-      if (APP_ICON_EL) { APP_ICON_EL.classList.remove('ma-hidden'); }
-      bindNativeHijack(hide);
-    }, 'applyVisibility');
-  }
-  function bindNativeHijack(on) {
-    safe(function () {
-      var natives = document.querySelectorAll('.app:not([data-ma-clone])');
-      for (var i = 0; i < natives.length; i++) {
-        var el = natives[i];
-        if (on) {
-          if (!el.__maHijack) {
-            el.__maHijack = function (e) { try { if (!DB.settings.hideAll) return; e.preventDefault(); e.stopPropagation(); openPanel(); } catch (err) {} };
-            el.addEventListener('click', el.__maHijack, true);
-          }
-        } else if (el.__maHijack) { try { el.removeEventListener('click', el.__maHijack, true); } catch (e2) {} el.__maHijack = null; }
-      }
-    }, 'bindNativeHijack');
-  }
-  function applyAppearance() {
-    safe(function () {
-      var s = DB.settings;
-      if (FAB) {
-        var size = clamp(s.ballSize || 52, 36, 88); FAB.style.width = size + 'px'; FAB.style.height = size + 'px'; FAB.style.fontSize = Math.max(11, Math.round(size * 0.30)) + 'px';
-        if (s.ballImage) { FAB.style.backgroundImage = 'url("' + s.ballImage + '")'; FAB.style.backgroundColor = 'transparent'; FAB.classList.add('ma-has-img'); }
-        else { FAB.style.backgroundImage = ''; FAB.style.backgroundColor = s.ballColor || '#ff6b81'; FAB.classList.remove('ma-has-img'); }
-      }
-      if (APP_ICON_EL) {
-        var nameEl = APP_ICON_EL.querySelector('[data-ma-name]');
-        if (nameEl) {
-          nameEl.textContent = s.appName || '审核';
-          nameEl.style.color = s.appColor || '#333333';
-        }
-        var holder = APP_ICON_IMG_EL;
-        if (holder) {
-          if (s.appImage) {
-            holder.style.backgroundImage = 'url("' + s.appImage + '")';
-            holder.style.backgroundColor = 'transparent';
-          } else {
-            holder.style.backgroundImage = 'none';
-            holder.style.backgroundColor = s.appIconColor || '#f5f5f5';
-          }
-        }
-      }
-    }, 'applyAppearance');
-  }
-
-  function updateBadge() {
-    safe(function () {
-      var n = pendingCount();
-      var f = FAB ? FAB.querySelector('.ma-fab-dot') : null;
-      if (f) { if (n > 0) { f.textContent = n > 99 ? '99+' : n; f.classList.add('on'); } else { f.textContent = ''; f.classList.remove('on'); } }
-      var a = APP_ICON_EL ? APP_ICON_EL.querySelector('.ma-app-dot') : null;
-      if (a) {
-        if (n > 0) { a.textContent = n > 99 ? '99+' : n; a.classList.add('on'); a.style.cssText = ''; }
-        else { a.textContent = ''; a.classList.remove('on'); a.style.cssText = 'display:none !important;'; }
-      }
-      var t = PANEL ? PANEL.querySelector('.ma-tab[data-tab="pending"] .ma-tab-badge') : null;
-      if (t) { t.textContent = n > 99 ? '99+' : String(n); t.style.display = n > 0 ? 'inline-block' : 'none'; }
-    }, 'updateBadge');
-  }
-
-  var TAB_DEF = [
-    { key: 'pending', label: '待审核' },
-    { key: 'cards', label: '字卡库' },
-    { key: 'auditreport', label: '审核报告字卡库' },
-    { key: 'history', label: '历史档案' },
-    { key: 'settings', label: '设置' }
-  ];
-
-  function buildUI() {
-    safe(function () {
-      ensureRoot(); var oldMask = document.getElementById('ma-mask'); if (oldMask && oldMask.parentNode) oldMask.parentNode.removeChild(oldMask);
-      MASK = document.createElement('div'); MASK.id = 'ma-mask'; PANEL = document.createElement('div'); PANEL.id = 'ma-panel';
-      var tabHtml = '';
-      for (var i = 0; i < TAB_DEF.length; i++) {
-        var t = TAB_DEF[i];
-        tabHtml += '<div class="ma-tab' + (t.key === CURRENT_TAB ? ' on' : '') + '" data-tab="' + t.key + '">' + t.label + (t.key === 'pending' ? '<span class="ma-tab-badge" style="display:none;">0</span>' : '') + '</div>';
-      }
-      PANEL.innerHTML = '<div class="ma-header"><div class="ma-title">审核中心</div><div class="ma-close" id="ma-close">×</div></div><div class="ma-tabs" id="ma-tabs">' + tabHtml + '</div><div class="ma-body" id="ma-body"></div>';
-      MASK.appendChild(PANEL); ROOT.appendChild(MASK);
-      var cb = PANEL.querySelector('#ma-close'); if (cb) cb.addEventListener('click', closePanel);
-      MASK.style.pointerEvents = 'none';
-      MASK.addEventListener('click', function (e) { if (e.target === MASK) closePanel(); });
-      var tb = PANEL.querySelector('#ma-tabs');
-      if (tb) tb.addEventListener('click', function (e) {
-    e.stopPropagation();
-    var el = e.target;
-    while (el && el !== tb && !el.getAttribute('data-tab')) el = el.parentNode;
-    if (!el || el === tb) return;
-    var tabKey = el.getAttribute('data-tab');
-    CURRENT_TAB = tabKey;
-    renderTabs();
-    renderPanelBody();
-});
-      if (!document.getElementById('ma-crop-mask')) { var cm = document.createElement('div'); cm.id = 'ma-crop-mask'; ROOT.appendChild(cm); }
-      if (!document.getElementById('ma-modal-mask')) { var mm = document.createElement('div'); mm.id = 'ma-modal-mask'; ROOT.appendChild(mm); }
-      if (!document.getElementById('ma-toast')) { var tt = document.createElement('div'); tt.id = 'ma-toast'; ROOT.appendChild(tt); }
-    }, 'buildUI');
-  }
-  function renderTabs() { safe(function () { if (!PANEL) return; var ts = PANEL.querySelectorAll('.ma-tab'); for (var i = 0; i < ts.length; i++) { if (ts[i].getAttribute('data-tab') === CURRENT_TAB) ts[i].classList.add('on'); else ts[i].classList.remove('on'); } updateBadge(); }, 'renderTabs'); }
-  function openPanel() { safe(function () { ensureRoot(); if (!MASK) buildUI(); if (!MASK) return; MASK.classList.add('on'); PANEL.style.pointerEvents = 'auto'; PANEL_OPEN = true; renderTabs(); renderPanelBody(); updateBadge(); }, 'openPanel'); }
-  function closePanel() { safe(function () { if (MASK) MASK.classList.remove('on'); PANEL.style.pointerEvents = 'none'; PANEL_OPEN = false; }, 'closePanel'); }
-
-
-  function renderPanelBody() {
-    safe(function () {
-      if (!PANEL) return; var body = PANEL.querySelector('#ma-body'); if (!body) return; var html = '';
-      if (CURRENT_TAB === 'pending') html = renderPendingTab();
-      else if (CURRENT_TAB === 'cards') html = renderCardsTab();
-      else if (CURRENT_TAB === 'auditreport') html = renderAuditReportTab();
-      else if (CURRENT_TAB === 'history') html = renderHistoryTab();
-      else html = renderSettingsTab();
-      body.innerHTML = html || '';
-      if (CURRENT_TAB === 'pending') bindPendingEvents(body);
-      else if (CURRENT_TAB === 'cards') bindCardsEvents(body);
-      else if (CURRENT_TAB === 'auditreport') bindAuditReportEvents(body);
-      else if (CURRENT_TAB === 'settings') bindSettingsEvents(body);
-    }, 'renderPanelBody');
-  }
-
-  function renderPendingTab() {
-    var pending = []; for (var pi = 0; pi < DB.pending.length; pi++) if (DB.pending[pi].status === 'pending') pending.push(DB.pending[pi]);
-    if (!pending.length) return '<div class="ma-empty">暂无待审核记录</div>';
-    pending.sort(function (a, b) { return (b.time || 0) - (a.time || 0); });
-    var h = '';
-    h += '<div class="ma-bulkbar" style="margin-bottom:10px;">';
-    h += '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="ma-pending-all"> 全选</label>';
-    h += '<span id="ma-pending-count" style="color:#888;">已选 0 个</span>';
-    h += '<button class="ma-btn sm" id="ma-pending-reject-checked" style="color:#e0355a; border-color:#ffb3c0;">勾选拒绝</button>';
-    h += '<button class="ma-btn sm primary" id="ma-pending-approve-checked">勾选同意</button>';
-    h += '<div style="flex:1;"></div>';
-    h += '<button class="ma-btn sm" id="ma-pending-reject-all" style="color:#e0355a;">全部拒绝</button>';
-    h += '<button class="ma-btn sm primary" id="ma-pending-approve-all">全部同意</button>';
-    h += '</div>';
-    var actM = { add: '新增', delete: '删除', disable: '禁用', enable: '启用', move: '迁移' }, clsM = { add: 'add', delete: 'del', disable: 'dis', enable: 'en', move: 'mv' };
-    for (var i = 0; i < pending.length; i++) {
-      var p = pending[i];
-      h += '<div class="ma-pending-item" data-pid="' + esc(p.id) + '">';
-      h += '<div class="ma-pending-top"><div style="display:flex;align-items:center;gap:8px;"><input type="checkbox" class="ma-pending-check" data-pid="' + esc(p.id) + '"><span class="ma-act-tag ' + (clsM[p.action] || '') + '">' + (actM[p.action] || p.action) + '</span></div><span class="ma-sender">来自 <b>' + esc(p.sender) + '</b> · ' + esc(fmtRelative(p.time)) + '</span></div>';
-      h += '<div class="ma-pending-text">' + esc(p.text) + '</div>';
-      if (p.note) h += '<div class="ma-pending-note" style="font-size:11px;color:#aaa;margin-bottom:8px;">' + esc(p.note) + '</div>';
-      if (p.action === 'add') {
-        h += '<div class="ma-row" style="margin:4px 0 6px;"><span class="ma-label">存入分类：</span><select class="ma-select" data-sel-group style="flex:1;">';
-        if (!DB.groups.length) h += '<option value="">(自动创建默认分类)</option>';
-        else for (var gi = 0; gi < DB.groups.length; gi++) h += '<option value="' + esc(DB.groups[gi].id) + '"' + (DB.groups[gi].id === p.toGroupId ? ' selected' : '') + '>' + esc(DB.groups[gi].name) + '</option>';
-        h += '</select></div>';
-      }
-      if (p.action === 'move') h += '<div style="font-size:12px;color:#888;margin:2px 0 6px;">迁移：<b>' + esc(p.fromGroupName) + '</b> → <b>' + esc(p.toGroupName) + '</b></div>';
-      h += '<div class="ma-pending-actions" style="display:flex;justify-content:flex-end;gap:8px;"><button class="ma-btn sm" data-pact="reject">拒绝</button><button class="ma-btn sm primary" data-pact="approve">同意</button></div></div>';
-    }
-    return h;
-  }
-
-  function bindPendingEvents(body) {
-    safe(function () {
-      var checkboxes = body.querySelectorAll('.ma-pending-check');
-      var countEl = body.querySelector('#ma-pending-count');
-      var allCb = body.querySelector('#ma-pending-all');
-      function updatePendingCount() {
-        var n = 0, total = checkboxes.length;
-        for (var i = 0; i < total; i++) { if (checkboxes[i].checked) n++; }
-        if (countEl) countEl.textContent = '已选 ' + n + ' 个';
-        if (allCb) allCb.checked = (n > 0 && n === total);
-      }
-      if (allCb) allCb.addEventListener('change', function () { for (var i = 0; i < checkboxes.length; i++) checkboxes[i].checked = allCb.checked; updatePendingCount(); });
-      for (var i = 0; i < checkboxes.length; i++) checkboxes[i].addEventListener('change', updatePendingCount);
-      var btnAppChecked = body.querySelector('#ma-pending-approve-checked');
-      if (btnAppChecked) btnAppChecked.addEventListener('click', function () { safe(function () {
-          var cbs = body.querySelectorAll('.ma-pending-check:checked'); if (!cbs.length) { toast('请先勾选'); return; }
-          var cnt = 0;
-          for (var i = 0; i < cbs.length; i++) {
-              var pid = cbs[i].getAttribute('data-pid'), p = null;
-              for (var k = 0; k < DB.pending.length; k++) if (DB.pending[k].id === pid) { p = DB.pending[k]; break; }
-              if (!p) continue;
-              var itemNode = cbs[i].closest('.ma-pending-item');
-              var sel = itemNode ? itemNode.querySelector('[data-sel-group]') : null;
-              var targetGid = sel ? sel.value : (DB.groups.length > 0 ? DB.groups[0].id : '');
-              if (approvePending(p, targetGid)) { DB.pending = DB.pending.filter(function (x) { return x.id !== pid; }); cnt++; }
-          }
-          saveData(); renderPanelBody(); updateBadge(); toast('已同意 ' + cnt + ' 条');
-      }, 'bulkApproveChecked'); });
-      var btnRejChecked = body.querySelector('#ma-pending-reject-checked');
-      if (btnRejChecked) btnRejChecked.addEventListener('click', function () { safe(function () {
-          var cbs = body.querySelectorAll('.ma-pending-check:checked'); if (!cbs.length) { toast('请先勾选'); return; }
-          var cnt = 0;
-          for (var i = 0; i < cbs.length; i++) {
-              var pid = cbs[i].getAttribute('data-pid'), p = null;
-              for (var k = 0; k < DB.pending.length; k++) if (DB.pending[k].id === pid) { p = DB.pending[k]; break; }
-              if (!p) continue;
-              rejectPending(p); DB.pending = DB.pending.filter(function (x) { return x.id !== pid; }); cnt++;
-          }
-          saveData(); renderPanelBody(); updateBadge(); toast('已拒绝 ' + cnt + ' 条');
-      }, 'bulkRejectChecked'); });
-      var btnAppAll = body.querySelector('#ma-pending-approve-all');
-      if (btnAppAll) btnAppAll.addEventListener('click', function () { safe(function () {
-          var cnt = 0; var list = DB.pending.slice();
-          for (var i = 0; i < list.length; i++) { var p = list[i]; if (p.status !== 'pending') continue; var targetGid = DB.groups.length > 0 ? DB.groups[0].id : ''; if (approvePending(p, targetGid)) cnt++; DB.pending = DB.pending.filter(function (x) { return x.id !== p.id; }); }
-          saveData(); renderPanelBody(); updateBadge(); toast('已批量同意 ' + cnt + ' 条');
-      }, 'bulkApproveAll'); });
-      var btnRejAll = body.querySelector('#ma-pending-reject-all');
-      if (btnRejAll) btnRejAll.addEventListener('click', function () { safe(function () {
-          var cnt = 0; var list = DB.pending.slice();
-          for (var i = 0; i < list.length; i++) { var p = list[i]; if (p.status !== 'pending') continue; rejectPending(p); DB.pending = DB.pending.filter(function (x) { return x.id !== p.id; }); cnt++; }
-          saveData(); renderPanelBody(); updateBadge(); toast('已批量拒绝 ' + cnt + ' 条');
-      }, 'bulkRejectAll'); });
-      eachNode(body, '.ma-pending-item', function (item) {
-        var pid = item.getAttribute('data-pid'), p = null; for (var i = 0; i < DB.pending.length; i++) if (DB.pending[i].id === pid) { p = DB.pending[i]; break; } if (!p) return;
-        var ab = item.querySelector('[data-pact="approve"]'), rb = item.querySelector('[data-pact="reject"]');
-        if (ab) ab.addEventListener('click', function () { safe(function () { var sel = item.querySelector('[data-sel-group]'); if (approvePending(p, sel ? sel.value : '')) { DB.pending = DB.pending.filter(function (x) { return x.id !== pid; }); saveData(); renderPanelBody(); updateBadge(); toast('已同意并入库'); } else toast('操作失败'); }, 'approve'); });
-        if (rb) rb.addEventListener('click', function () { safe(function () { rejectPending(p); DB.pending = DB.pending.filter(function (x) { return x.id !== pid; }); saveData(); renderPanelBody(); updateBadge(); toast('已拒绝'); }, 'reject'); });
-      });
-    }, 'bindPendingEvents');
-  }
-  function approvePending(p, targetGid) {
-    if (!p) return false;
-    var ok = false;
-    if (p.action === 'add') {
-      var g = targetGid ? findGroup(targetGid) : null;
-      if (!g) {
-        if (!DB.groups.length) {
-          g = { id: uid('g'), name: '默认', disabledBy: [], cards: [] };
-          DB.groups.push(g);
-        } else {
-          g = DB.groups[0];
-        }
-      }
-      g.cards.push({ id: uid('c'), text: p.text, disabledBy: [], createdAt: Date.now() });
-      ok = true;
-      pushHistory({ sender: p.sender || SENDER_MJ, action: 'add', text: p.text, result: 'agree', extra: 'group:' + g.id });
-    } else if (p.action === 'delete') {
-      var f1 = findCard(p.cardId);
-      if (f1) {
-        f1.group.cards = f1.group.cards.filter(function (x) { return x.id !== f1.card.id; });
-        ok = true;
-        pushHistory({ sender: p.sender || SENDER_MJ, action: 'delete', text: p.text, result: 'agree', extra: 'card:' + f1.card.id });
-      }
-    } else if (p.action === 'disable') {
-      var f2 = findCard(p.cardId);
-      if (f2) {
-        if (f2.card.disabledBy.indexOf('mj') < 0) f2.card.disabledBy.push('mj');
-        ok = true;
-        pushHistory({ sender: p.sender || SENDER_MJ, action: 'disable', text: p.text, result: 'agree', extra: 'card:' + f2.card.id });
-      }
-    } else if (p.action === 'enable') {
-      var f3 = findCard(p.cardId);
-      if (f3) {
-        f3.card.disabledBy = f3.card.disabledBy.filter(function (x) { return x !== 'mj'; });
-        ok = true;
-        pushHistory({ sender: p.sender || SENDER_MJ, action: 'enable', text: p.text, result: 'agree', extra: 'card:' + f3.card.id });
-      }
-    } else if (p.action === 'move') {
-      var f4 = findCard(p.cardId);
-      var tg = findGroup(p.toGroupId);
-      if (f4 && tg) {
-        f4.group.cards = f4.group.cards.filter(function (x) { return x.id !== f4.card.id; });
-        tg.cards.push(f4.card);
-        ok = true;
-        pushHistory({ sender: p.sender || SENDER_MJ, action: 'move', text: p.text, result: 'agree', extra: 'from:' + f4.group.id + ',to:' + tg.id });
-      }
-    }
-    return ok;
-  }
-
-  function rejectPending(p) {
-    if (!p) return false;
-    pushHistory({ sender: p.sender || SENDER_MJ, action: p.action || 'unknown', text: p.text, result: 'reject', extra: '' });
+    injectBubbleToChat(mockCard, chatTarget);
     return true;
-  }
+}
 
-  function renderCardsTab() {
-    var h = '';
-    h += '<div class="ma-bulkbar" style="margin-bottom:10px;">';
-    h += '<button class="ma-btn sm primary" id="ma-card-add">+ 新增字卡</button>';
-    h += '<button class="ma-btn sm" id="ma-group-add">+ 新建分类</button>';
-    h += '<div style="flex:1;"></div>';
-    h += '<button class="ma-btn sm" id="ma-cards-toggle-all">展开/收起</button>';
-    h += '</div>';
-    if (!DB.groups.length) return '<div class="ma-empty">还没有分类，点击“新建分类”开始</div>';
-    for (var gi = 0; gi < DB.groups.length; gi++) {
-      var g = DB.groups[gi];
-      var open = OPEN_GROUPS && OPEN_GROUPS[g.id];
-      h += '<div class="ma-group' + (open ? ' open' : '') + '" data-gid="' + esc(g.id) + '">';
-      h += '<div class="ma-group-head"><div class="ma-group-title"><input type="checkbox" class="ma-group-check" data-gid="' + esc(g.id) + '"><span>' + esc(g.name) + '</span><span style="color:#888;font-weight:400;">(' + g.cards.length + ')</span></div><div style="display:flex;gap:6px;align-items:center;"><button class="ma-btn sm" data-act="group-rename" data-gid="' + esc(g.id) + '">重命名</button><button class="ma-btn sm danger" data-act="group-delete" data-gid="' + esc(g.id) + '">删除</button></div></div>';
-      h += '<div class="ma-group-body">';
-      if (!g.cards.length) h += '<div class="ma-empty" style="padding:16px 0;">这个分类还没有字卡</div>';
-      for (var ci = 0; ci < g.cards.length; ci++) {
-        var c = g.cards[ci];
-        var disabled = (c.disabledBy || []).length > 0;
-        var disUser = c.disabledBy.indexOf('user') >= 0;
-        var disMj = c.disabledBy.indexOf('mj') >= 0;
-        h += '<div class="ma-card' + (disabled ? ' disabled' : '') + '" data-cid="' + esc(c.id) + '">';
-        h += '<input type="checkbox" class="ma-card-check" data-cid="' + esc(c.id) + '">';
-        h += '<div class="ma-card-main"><div class="ma-card-text">' + esc(c.text) + '</div>';
-        h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">';
-        if (disUser) h += '<span class="ma-badge-dis user">我禁用</span>';
-        if (disMj) h += '<span class="ma-badge-dis mj">梦角禁用</span>';
-        if (disUser && disMj) h += '<span class="ma-badge-dis both">双方禁用</span>';
-        h += '</div></div>';
-        h += '<div class="ma-card-ops"><button class="ma-btn sm" data-act="card-send" data-cid="' + esc(c.id) + '">发送</button><button class="ma-btn sm" data-act="card-edit" data-cid="' + esc(c.id) + '">编辑</button><button class="ma-btn sm" data-act="card-toggle" data-cid="' + esc(c.id) + '">' + (disabled ? '启用' : '禁用') + '</button><button class="ma-btn sm danger" data-act="card-delete" data-cid="' + esc(c.id) + '">删除</button></div>';
-        h += '</div>';
-      }
-      h += '</div></div>';
-    }
-    return h;
-  }
-
-  function bindCardsEvents(body) {
-    safe(function () {
-      if (!OPEN_GROUPS) OPEN_GROUPS = {};
-      eachNode(body, '.ma-group-head', function (head) {
-        head.addEventListener('click', function (e) {
-          if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
-          var group = head.parentElement;
-          var gid = group.getAttribute('data-gid');
-          group.classList.toggle('open');
-          OPEN_GROUPS[gid] = group.classList.contains('open');
-        });
-      });
-      var btnAdd = body.querySelector('#ma-card-add');
-      if (btnAdd) btnAdd.addEventListener('click', function () {
-        var text = prompt('请输入新字卡内容：');
-        if (!text) return;
-        text = text.trim();
-        if (!text) return;
-        var gid = DB.groups.length > 0 ? DB.groups[0].id : '';
-        var g = findGroup(gid);
-        if (!g) {
-          g = { id: uid('g'), name: '默认', disabledBy: [], cards: [] };
-          DB.groups.push(g);
+// ============================================================================
+// 第5段：CSS样式补充（批量按钮、导入导出、敏感词输入框样式）
+// ============================================================================
+function appendExtraCss() {
+    const styleId = 'my-audit-extra-style';
+    if (document.getElementById(styleId)) return;
+    const styleEl = document.createElement('style');
+    styleEl.id = styleId;
+    styleEl.textContent = `
+        .my-audit-card-bubble {
+            max-width: 320px !important;
+            width: fit-content;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 10px;
+            box-sizing: border-box;
+            overflow: hidden;
         }
-        g.cards.push({ id: uid('c'), text: text, disabledBy: [], createdAt: Date.now() });
-        saveData();
-        renderPanelBody();
-        toast('已新增字卡');
-      });
-      var btnGroupAdd = body.querySelector('#ma-group-add');
-      if (btnGroupAdd) btnGroupAdd.addEventListener('click', function () {
-        var name = prompt('请输入新分类名称：');
-        if (!name) return;
-        name = name.trim();
-        if (!name) return;
-        DB.groups.push({ id: uid('g'), name: name, disabledBy: [], cards: [] });
-        saveData();
-        renderPanelBody();
-        toast('已新建分类');
-      });
-      var btnToggleAll = body.querySelector('#ma-cards-toggle-all');
-      if (btnToggleAll) btnToggleAll.addEventListener('click', function () {
-        var groups = body.querySelectorAll('.ma-group');
-        var anyClosed = false;
-        for (var i = 0; i < groups.length; i++) if (!groups[i].classList.contains('open')) anyClosed = true;
-        for (var i = 0; i < groups.length; i++) {
-          var gid = groups[i].getAttribute('data-gid');
-          if (anyClosed) { groups[i].classList.add('open'); OPEN_GROUPS[gid] = true; }
-          else { groups[i].classList.remove('open'); OPEN_GROUPS[gid] = false; }
+        .my-card-img-wrap {
+            width: 100%;
+            max-width: 280px;
+            max-height: 240px;
+            overflow: hidden;
+            margin: 6px 0;
         }
-      });
-      eachNode(body, '.ma-card', function (row) {
-        var cid = row.getAttribute('data-cid');
-        var f = findCard(cid);
-        if (!f) return;
-        var btnSend = row.querySelector('[data-act="card-send"]');
-        var btnEdit = row.querySelector('[data-act="card-edit"]');
-        var btnToggle = row.querySelector('[data-act="card-toggle"]');
-        var btnDelete = row.querySelector('[data-act="card-delete"]');
-        if (btnSend) btnSend.addEventListener('click', function () { sendCardToChat(cid); });
-        if (btnEdit) btnEdit.addEventListener('click', function () {
-          var newText = prompt('编辑字卡内容：', f.card.text);
-          if (newText === null) return;
-          newText = newText.trim();
-          if (!newText) { toast('内容不能为空'); return; }
-          f.card.text = newText;
-          saveData();
-          renderPanelBody();
-          toast('已保存');
-        });
-        if (btnToggle) btnToggle.addEventListener('click', function () {
-          var idx = f.card.disabledBy.indexOf('user');
-          if (idx >= 0) f.card.disabledBy.splice(idx, 1); else f.card.disabledBy.push('user');
-          saveData();
-          renderPanelBody();
-          toast('已切换禁用状态');
-        });
-        if (btnDelete) btnDelete.addEventListener('click', function () {
-          if (!confirm('确定删除这条字卡？')) return;
-          f.group.cards = f.group.cards.filter(function (x) { return x.id !== f.card.id; });
-          saveData();
-          renderPanelBody();
-          toast('已删除');
-        });
-      });
-      eachNode(body, '[data-act="group-rename"]', function (btn) {
-        btn.addEventListener('click', function () {
-          var gid = btn.getAttribute('data-gid');
-          var g = findGroup(gid);
-          if (!g) return;
-          var name = prompt('重命名分类：', g.name);
-          if (!name) return;
-          name = name.trim();
-          if (!name) return;
-          g.name = name;
-          saveData();
-          renderPanelBody();
-          toast('已重命名');
-        });
-      });
-      eachNode(body, '[data-act="group-delete"]', function (btn) {
-        btn.addEventListener('click', function () {
-          var gid = btn.getAttribute('data-gid');
-          var g = findGroup(gid);
-          if (!g) return;
-          if (DB.groups.length <= 1) { toast('至少保留一个分类'); return; }
-          if (!confirm('删除分类“' + g.name + '”及其全部字卡？')) return;
-          DB.groups = DB.groups.filter(function (x) { return x.id !== gid; });
-          saveData();
-          renderPanelBody();
-          toast('已删除分类');
-        });
-      });
-    }, 'bindCardsEvents');
-  }
+        .my-card-img {
+            width: 100%;
+            height: auto;
+            object-fit: contain;
+            display: block;
+        }
+        .my-card-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #444;
+            margin-bottom:4px;
+        }
+        .my-card-content {
+            font-size:14px;
+            line-height:1.5;
+            word-break: break-word;
+        }
+        .my-card-footer {
+            margin-top:8px;
+            display:flex;
+            gap:6px;
+        }
+        .my-card-footer button {
+            font-size:12px;
+            padding:3px 8px;
+            cursor:pointer;
+        }
+        .my-audit-panel-block {
+            margin:12px 0;
+        }
+        .my-audit-panel-block label {
+            display:block;
+            margin-bottom:4px;
+            font-size:13px;
+        }
+        .my-audit-textarea {
+            width:100%;
+            min-height:100px;
+            box-sizing:border-box;
+            padding:6px;
+        }
+        .my-audit-input {
+            width:100%;
+            box-sizing:border-box;
+            padding:6px;
+        }
+        .my-audit-btn-group {
+            display:flex;
+            gap:8px;
+            flex-wrap:wrap;
+            margin:8px 0;
+        }
+        .my-audit-batch-btn {
+            padding:5px 10px;
+            cursor:pointer;
+        }
+    `;
+    document.head.appendChild(styleEl);
+}
+// ============================================================================
+// 第4段：抓取引擎函数 grabFromChat / maybeMischief / autoSendCard
+// 接入设置动态参数 + 冷却防刷屏
+// ============================================================================
+let sendCoolDownTs = 0;
+function grabFromChat(chatText) {
+    if (!chatText) return null;
+    const cfg = getAuditSettings();
+    const triggerReg = new RegExp(cfg.grabRule || '\\[card:(.*?)\\]', cfg.grabFlag || 'g');
+    const matchRes = [...chatText.matchAll(triggerReg)];
+    if (!matchRes.length) return null;
+    return matchRes.map(item => item[1]);
+}
 
-  function renderAuditReportTab() {
-    var h = '';
-    h += '<div class="ma-bulkbar" style="margin-bottom:10px;">';
-    h += '<span style="color:#666;">审核报告字卡库：审核通过归档内容</span>';
-    h += '<div style="flex:1;"></div>';
-    h += '<button class="ma-btn sm primary" id="ma-audit-add">+ 新增报告字卡</button>';
-    h += '</div>';
-    var reportCards = safe(function () {
-      return DB.history.filter(function (x) { return x.result === 'agree'; }).slice(-50);
-    }, 'auditReportCards', []);
-    if (!reportCards.length) return '<div class="ma-empty">还没有审核通过记录</div>';
-    h += '<div style="display:flex;flex-direction:column;gap:8px;">';
-    for (var i = 0; i < reportCards.length; i++) {
-      var r = reportCards[i];
-      h += '<div class="ma-pending-item" style="margin-bottom:0;">';
-      h += '<div class="ma-pending-top"><span class="ma-act-tag add">' + esc(r.action || 'agree') + '</span><span class="ma-sender">来自 <b>' + esc(r.sender) + '</b> · ' + esc(fmtRelative(r.time)) + '</span></div>';
-      h += '<div class="ma-pending-text">' + esc(r.text) + '</div>';
-      h += '<div class="ma-pending-actions" style="display:flex;justify-content:flex-end;gap:8px;">';
-      h += '<button class="ma-btn sm" data-act="report-copy" data-text="' + esc(r.text) + '">复制</button>';
-      h += '<button class="ma-btn sm primary" data-act="report-send" data-text="' + esc(r.text) + '">发送到聊天</button>';
-      h += '</div></div>';
+function maybeMischief(rawText) {
+    const cfg = getAuditSettings();
+    const sensitiveList = (cfg.sensitiveWords || '').split(/[\n,]/).map(w=>w.trim()).filter(Boolean);
+    for(const word of sensitiveList) {
+        if(rawText.includes(word)) {
+            return { hit: true, word };
+        }
     }
-    h += '</div>';
-    return h;
-  }
+    return { hit: false };
+}
 
-  function bindAuditReportEvents(body) {
-    safe(function () {
-      var btnAdd = body.querySelector('#ma-audit-add');
-      if (btnAdd) {
-        btnAdd.addEventListener('click', function () {
-          var text = prompt('输入审核报告字卡内容：');
-          if (!text) return;
-          text = text.trim();
-          if (!text) return;
-          pushHistory({ sender: SENDER_ME, action: 'manual', text: text, result: 'agree', extra: 'audit-report' });
-          toast('已新增到报告库');
-          renderPanelBody();
-        });
-      }
-      eachNode(body, '[data-act="report-copy"]', function (btn) {
-        btn.addEventListener('click', function () {
-          var text = btn.getAttribute('data-text');
-          safe(function () {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              navigator.clipboard.writeText(text).then(function () { toast('已复制'); });
-            } else {
-              var ta = document.createElement('textarea');
-              ta.value = text;
-              document.body.appendChild(ta);
-              ta.select();
-              document.execCommand('copy');
-              document.body.removeChild(ta);
-              toast('已复制');
+async function autoSendCard(cardText, chatTarget) {
+    const cfg = getAuditSettings();
+    const now = Date.now();
+    // 冷却校验
+    if (now - sendCoolDownTs < (cfg.cooldownMs || 1200)) {
+        console.log('[autoSendCard] 冷却中，跳过发送');
+        return false;
+    }
+    if (!cardText || !chatTarget) return false;
+
+    const riskCheck = maybeMischief(cardText);
+    if (riskCheck.hit && cfg.blockSensitive) {
+        console.log('[autoSendCard] 命中敏感词拦截：', riskCheck.word);
+        return false;
+    }
+
+    sendCoolDownTs = now;
+    // 模拟发送注入
+    const mockCard = {
+        uid: `auto-${now}`,
+        name: cfg.defaultSender || '字卡助手',
+        content: cardText,
+        tag: '自动抓取',
+        imgUrl: null
+    };
+    injectBubbleToChat(mockCard, chatTarget);
+    return true;
+}
+// ============================================================================
+// 第5段：CSS样式补充（批量按钮、导入导出、敏感词输入框样式）
+// ============================================================================
+function appendExtraCss() {
+    const styleId = 'my-audit-extra-style';
+    if (document.getElementById(styleId)) return;
+    const styleEl = document.createElement('style');
+    styleEl.id = styleId;
+    styleEl.textContent = `
+        .my-audit-card-bubble {
+            max-width: 320px !important;
+            width: fit-content;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 10px;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+        .my-card-img-wrap {
+            width: 100%;
+            max-width: 280px;
+            max-height: 240px;
+            overflow: hidden;
+            margin: 6px 0;
+        }
+        .my-card-img {
+            width: 100%;
+            height: auto;
+            object-fit: contain;
+            display: block;
+        }
+        .my-card-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #444;
+            margin-bottom:4px;
+        }
+        .my-card-content {
+            font-size:14px;
+            line-height:1.5;
+            word-break: break-word;
+        }
+        .my-card-footer {
+            margin-top:8px;
+            display:flex;
+            gap:6px;
+        }
+        .my-card-footer button {
+            font-size:12px;
+            padding:3px 8px;
+            cursor:pointer;
+        }
+        .my-audit-panel-block {
+            margin:12px 0;
+        }
+        .my-audit-panel-block label {
+            display:block;
+            margin-bottom:4px;
+            font-size:13px;
+        }
+        .my-audit-textarea {
+            width:100%;
+            min-height:100px;
+            box-sizing:border-box;
+            padding:6px;
+        }
+        .my-audit-input {
+            width:100%;
+            box-sizing:border-box;
+            padding:6px;
+        }
+        .my-audit-btn-group {
+            display:flex;
+            gap:8px;
+            flex-wrap:wrap;
+            margin:8px 0;
+        }
+        .my-audit-batch-btn {
+            padding:5px 10px;
+            cursor:pointer;
+        }
+    `;
+    document.head.appendChild(styleEl);
+}
+// ============================================================================
+// 第6段：UI渲染、cardsTab批量操作、settingsTab新版【引擎全参数+敏感词+全库备份导入导出】
+// ============================================================================
+function renderCardsTab(container, cardList) {
+    container.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'my-audit-tab-wrap';
+
+    const batchBar = document.createElement('div');
+    batchBar.className = 'my-audit-btn-group';
+    batchBar.innerHTML = `
+        <button class="my-audit-batch-btn" data-action="selectAll">全选</button>
+        <button class="my-audit-batch-btn" data-action="unselectAll">取消全选</button>
+        <button class="my-audit-batch-btn" data-action="batchDelete">批量删除选中</button>
+        <button class="my-audit-batch-btn" data-action="exportSelected">导出选中</button>
+    `;
+    wrap.appendChild(batchBar);
+
+    const cardWrap = document.createElement('div');
+    cardWrap.className = 'my-audit-card-list';
+    cardWrap.style.marginTop = '10px';
+    cardWrap.style.maxHeight = '320px';
+    cardWrap.style.overflowY = 'auto';
+
+    cardList.forEach((card, idx) => {
+        const item = document.createElement('div');
+        item.className = 'my-audit-card-item';
+        item.style.padding = '8px';
+        item.style.borderBottom = '1px solid #eee';
+        item.style.display = 'flex';
+        item.style.gap = '8px';
+        item.style.alignItems = 'flex-start';
+        item.innerHTML = `
+            <input type="checkbox" class="card-check-item" data-uid="${escapeHtml(card.uid)}">
+            <div style="flex:1;">
+                <div style="font-weight:bold;font-size:13px;">${escapeHtml(card.name || '无名称')}</div>
+                <div style="font-size:12px;color:#666;">标签：${escapeHtml(card.tag || '-')}</div>
+                <div style="font-size:13px;margin-top:4px;word-break:break-all;">${escapeHtml(card.content)}</div>
+                ${card.imgUrl ? `<div style="margin-top:4px;font-size:12px;color:#2563eb;">[配图]</div>` : ''}
+            </div>
+        `;
+        cardWrap.appendChild(item);
+    });
+
+    wrap.appendChild(cardWrap);
+    container.appendChild(wrap);
+
+    // 绑定批量按钮事件
+    batchBar.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const action = btn.dataset.action;
+            const checks = cardWrap.querySelectorAll('.card-check-item');
+            switch(action) {
+                case 'selectAll':
+                    checks.forEach(c => c.checked = true);
+                    break;
+                case 'unselectAll':
+                    checks.forEach(c => c.checked = false);
+                    break;
+                case 'batchDelete':
+                    const delUids = Array.from(checks).filter(c=>c.checked).map(c=>c.dataset.uid);
+                    if(delUids.length && confirm(`确定删除选中 ${delUids.length} 条字卡？`)) {
+                        deleteCardBatch(delUids);
+                        refreshAuditPanel();
+                    }
+                    break;
+                case 'exportSelected':
+                    const expUids = Array.from(checks).filter(c=>c.checked).map(c=>c.dataset.uid);
+                    if(expUids.length) {
+                        exportCardByUidList(expUids);
+                    }
+                    break;
             }
-          }, 'copy');
         });
-      });
-      eachNode(body, '[data-act="report-send"]', function (btn) {
-        btn.addEventListener('click', function () {
-          var text = btn.getAttribute('data-text');
-          var ok = injectBubbleToChat(text);
-          toast(ok ? '发送成功' : '发送失败');
-        });
-      });
-    }, 'bindAuditReportEvents');
-  }
+    });
+}
 
-  function renderHistoryTab() {
-    var list = safe(function () { return DB.history.slice().reverse(); }, 'historyList', []);
-    if (!list.length) return '<div class="ma-empty">暂无历史记录</div>';
-    var h = '<div style="display:flex;flex-direction:column;gap:8px;">';
-    for (var i = 0; i < list.length; i++) {
-      var r = list[i];
-      var resultTag = r.result === 'agree'
-        ? '<span class="ma-act-tag add">同意</span>'
-        : '<span class="ma-act-tag del">拒绝</span>';
-      h += '<div class="ma-pending-item" style="margin-bottom:0;">';
-      h += '<div class="ma-pending-top">' + resultTag + '<span class="ma-sender">来自 <b>' + esc(r.sender) + '</b> · ' + esc(fmtTime(r.time)) + '</span></div>';
-      h += '<div class="ma-pending-text">' + esc(r.text) + '</div>';
-      if (r.extra) h += '<div class="ma-pending-note" style="font-size:11px;color:#aaa;">' + esc(r.extra) + '</div>';
-      h += '</div>';
-    }
-    h += '</div>';
-    return h;
-  }
+function renderSettingsTab(container, cfg) {
+    container.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'my-audit-tab-wrap';
 
-  function renderSettingsTab() {
-    var s = DB.settings;
-    var h = '';
-    h += '<div class="ma-set-block">';
-    h += '<div style="font-weight:700;margin-bottom:8px;">悬浮球样式</div>';
-    h += '<div class="ma-row"><span style="width:80px;">颜色</span><input type="color" id="ma-set-ballColor" value="' + esc(s.ballColor) + '" style="width:60px;height:32px;padding:2px;border-radius:6px;border:1px solid #ddd;">';
-    h += '<span style="width:60px;margin-left:12px;">大小</span><input type="range" id="ma-set-ballSize" min="36" max="88" value="' + s.ballSize + '" style="flex:1;"><span id="ma-set-ballSize-val" style="width:40px;text-align:right;">' + s.ballSize + 'px</span></div>';
-    h += '<div class="ma-row"><span style="width:80px;">悬浮球图片</span><input type="file" id="ma-set-ballImage" accept="image/*" style="flex:1;"></div>';
-    if (s.ballImage) h += '<div style="margin-top:6px;"><img id="ma-set-ballImage-preview" src="' + esc(s.ballImage) + '" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:1px solid #eee;"></div>';
-    h += '</div>';
-    h += '<div class="ma-set-block">';
-    h += '<div style="font-weight:700;margin-bottom:8px;">应用图标样式</div>';
-    h += '<div class="ma-row"><span style="width:80px;">图标名称</span><input type="text" id="ma-set-appName" class="ma-input" value="' + esc(s.appName) + '"></div>';
-    h += '<div class="ma-row"><span style="width:80px;">文字颜色</span><input type="color" id="ma-set-appColor" value="' + esc(s.appColor) + '" style="width:60px;height:32px;padding:2px;border-radius:6px;border:1px solid #ddd;"></div>';
-    h += '<div class="ma-row"><span style="width:80px;">图标背景</span><input type="color" id="ma-set-appIconColor" value="' + esc(s.appIconColor || '#f5f5f5') + '" style="width:60px;height:32px;padding:2px;border-radius:6px;border:1px solid #ddd;"></div>';
-    h += '<div class="ma-row"><span style="width:80px;">图标图片</span><input type="file" id="ma-set-appImage" accept="image/*" style="flex:1;"></div>';
-    if (s.appImage) h += '<div style="margin-top:6px;"><img id="ma-set-appImage-preview" src="' + esc(s.appImage) + '" style="width:80px;height:80px;border-radius:14px;object-fit:cover;border:1px solid #eee;"></div>';
-    h += '</div>';
-    h += '<div class="ma-set-block">';
-    h += '<div style="font-weight:700;margin-bottom:8px;">显示控制</div>';
-    h += '<div class="ma-row"><span style="flex:1;">隐藏悬浮球和面板</span><div class="ma-switch' + (s.hideAll ? ' on' : '') + '" id="ma-set-hideAll"></div></div>';
-    h += '<div class="ma-row"><button class="ma-btn sm" id="ma-set-reset-pos">重置悬浮球位置</button><button class="ma-btn sm danger" id="ma-set-clear-data">清空所有数据</button></div>';
-    h += '</div>';
-    return h;
-  }
-
-  function bindSettingsEvents(body) {
-    safe(function () {
-      var s = DB.settings;
-      var ballColor = body.querySelector('#ma-set-ballColor');
-      if (ballColor) ballColor.addEventListener('input', function () { s.ballColor = ballColor.value; applyAppearance(); saveData(); });
-      var ballSize = body.querySelector('#ma-set-ballSize');
-      var ballSizeVal = body.querySelector('#ma-set-ballSize-val');
-      if (ballSize) ballSize.addEventListener('input', function () {
-        s.ballSize = parseInt(ballSize.value, 10);
-        if (ballSizeVal) ballSizeVal.textContent = s.ballSize + 'px';
-        applyAppearance();
-        applyFabPosition();
-        saveData();
-      });
-      var ballImage = body.querySelector('#ma-set-ballImage');
-      if (ballImage) ballImage.addEventListener('change', function () {
-        var file = ballImage.files && ballImage.files[0];
-        if (!file) return;
-        var reader = new FileReader();
-        reader.onload = function () {
-          s.ballImage = String(reader.result || '');
-          applyAppearance();
-          saveData();
-          renderPanelBody();
-        };
-        reader.readAsDataURL(file);
-      });
-      var appName = body.querySelector('#ma-set-appName');
-      if (appName) appName.addEventListener('change', function () { s.appName = appName.value.trim() || '审核'; applyAppearance(); saveData(); });
-      var appColor = body.querySelector('#ma-set-appColor');
-      if (appColor) appColor.addEventListener('input', function () { s.appColor = appColor.value; applyAppearance(); saveData(); });
-      var appIconColor = body.querySelector('#ma-set-appIconColor');
-      if (appIconColor) appIconColor.addEventListener('input', function () { s.appIconColor = appIconColor.value; applyAppearance(); saveData(); });
-      var appImage = body.querySelector('#ma-set-appImage');
-      if (appImage) appImage.addEventListener('change', function () {
-        var file = appImage.files && appImage.files[0];
-        if (!file) return;
-        var reader = new FileReader();
-        reader.onload = function () {
-          s.appImage = String(reader.result || '');
-          applyAppearance();
-          saveData();
-          renderPanelBody();
-        };
-        reader.readAsDataURL(file);
-      });
-      var hideAll = body.querySelector('#ma-set-hideAll');
-      if (hideAll) hideAll.addEventListener('click', function () {
-        s.hideAll = !s.hideAll;
-        hideAll.classList.toggle('on', s.hideAll);
-        applyVisibility();
-        saveData();
-        toast(s.hideAll ? '已隐藏悬浮球' : '已显示悬浮球');
-      });
-      var resetPos = body.querySelector('#ma-set-reset-pos');
-      if (resetPos) resetPos.addEventListener('click', function () {
-        s.ballPos = null;
-        applyFabPosition();
-        saveData();
-        toast('已重置位置');
-      });
-      var clearData = body.querySelector('#ma-set-clear-data');
-      if (clearData) clearData.addEventListener('click', function () {
-        if (!confirm('确定清空所有字卡、待审核和历史数据？此操作不可恢复。')) return;
-        localStorage.removeItem(LS_KEY_DATA);
-        DB = defaultData();
-        saveData();
-        renderPanelBody();
-        toast('已清空数据');
-      });
-    }, 'bindSettingsEvents');
-  }
-
-  function startGuard() {
-    safe(function () {
-      DB = loadData();
-      injectCSS();
-      buildFab();
-      startAppIconGuard();
-      applyAppearance();
-      applyVisibility();
-      updateBadge();
-      startEngine();
-      setInterval(function () {
-        safe(function () {
-          if (!FAB || !document.body.contains(FAB)) buildFab();
-          if (!APP_ICON_EL || !document.body.contains(APP_ICON_EL)) injectAppIcon();
-          applyAppearance();
-          applyVisibility();
-          updateBadge();
-          checkAndRepairChat();
-        }, 'guard');
-      }, 2000);
-      window.addEventListener('resize', function () { safe(applyFabPosition, 'resize'); });
-      safe(function () {
-        if (location.href.indexOf('ma-show=1') >= 0) {
-          URL_FORCE_SHOW = true;
-          applyVisibility();
-          setTimeout(function () { openPanel(); }, 800);
+    const blockList = [
+        {
+            title: '抓取引擎配置',
+            html: `
+                <div class="my-audit-panel-block">
+                    <label>抓取正则表达式</label>
+                    <input class="my-audit-input" id="grabRule" value="${escapeHtml(cfg.grabRule || '\\[card:(.*?)\\]')}">
+                </div>
+                <div class="my-audit-panel-block">
+                    <label>正则修饰符</label>
+                    <input class="my-audit-input" id="grabFlag" value="${escapeHtml(cfg.grabFlag || 'g')}">
+                </div>
+                <div class="my-audit-panel-block">
+                    <label>抓取扫描间隔(ms)</label>
+                    <input class="my-audit-input" id="scanIntervalMs" type="number" value="${cfg.scanIntervalMs || 600}">
+                </div>
+                <div class="my-audit-panel-block">
+                    <label>最大待审队列数量</label>
+                    <input class="my-audit-input" id="maxPending" type="number" value="${cfg.maxPending || 10}">
+                </div>
+                <div class="my-audit-panel-block">
+                    <label>单次最大抓取条数</label>
+                    <input class="my-audit-input" id="grabMaxCount" type="number" value="${cfg.grabMaxCount || 3}">
+                </div>
+                <div class="my-audit-panel-block">
+                    <label>情感触发概率(0~1)</label>
+                    <input class="my-audit-input" id="emotionProb" type="number" step="0.01" min="0" max="1" value="${cfg.emotionProb || 1.0}">
+                </div>
+                <div class="my-audit-panel-block">
+                    <label>Mischief触发概率(0~1)</label>
+                    <input class="my-audit-input" id="mischiefProb" type="number" step="0.01" min="0" max="1" value="${cfg.mischiefProb || 1.0}">
+                </div>
+                <div class="my-audit-panel-block">
+                    <label>发送冷却时间(ms)</label>
+                    <input class="my-audit-input" id="cooldownMs" type="number" value="${cfg.cooldownMs || 1200}">
+                </div>
+                <div class="my-audit-panel-block">
+                    <label>默认发送者名称</label>
+                    <input class="my-audit-input" id="defaultSender" value="${escapeHtml(cfg.defaultSender || '字卡助手')}">
+                </div>
+            `
+        },
+        {
+            title: '敏感词拦截',
+            html: `
+                <div class="my-audit-panel-block">
+                    <label><input type="checkbox" id="blockSensitive" ${cfg.blockSensitive ? 'checked' : ''}> 开启敏感词拦截</label>
+                </div>
+                <div class="my-audit-panel-block">
+                    <label>敏感词列表（换行/逗号分隔）</label>
+                    <textarea class="my-audit-textarea" id="sensitiveWords">${escapeHtml(cfg.sensitiveWords || '')}</textarea>
+                </div>
+            `
+        },
+        {
+            title: '导入导出',
+            html: `
+                <div class="my-audit-btn-group">
+                    <button class="my-audit-batch-btn" id="exportAllBtn">导出全部字卡</button>
+                    <button class="my-audit-batch-btn" id="exportFullBackupBtn">全库备份(groups+pending+history+settings)</button>
+                    <button class="my-audit-batch-btn" id="importBtn">导入JSON字卡</button>
+                    <button class="my-audit-batch-btn" id="importBackupBtn">恢复全库备份</button>
+                    <input type="file" id="importFileInput" accept="application/json" style="display:none;">
+                    <input type="file" id="importBackupFile" accept="application/json" style="display:none;">
+                </div>
+                <div class="my-audit-panel-block">
+                    <label>粘贴JSON导入</label>
+                    <textarea class="my-audit-textarea" id="importTextarea" placeholder="粘贴字卡JSON数组 / 备份JSON"></textarea>
+                    <div class="my-audit-btn-group">
+                        <button class="my-audit-batch-btn" id="importTextBtn">从文本框导入字卡</button>
+                        <button class="my-audit-batch-btn" id="restoreBackupTextBtn">从文本恢复备份</button>
+                    </div>
+                </div>
+            `
         }
-      }, 'urlForceShow');
-    }, 'startGuard');
-  }
+    ];
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { startGuard(); });
-  } else {
+    blockList.forEach(b => {
+        const bDom = document.createElement('div');
+        bDom.style.marginBottom = '16px';
+        bDom.innerHTML = `<div style="font-weight:bold;margin-bottom:6px;">${escapeHtml(b.title)}</div>${b.html}`;
+        wrap.appendChild(bDom);
+    });
+
+    const saveBtnWrap = document.createElement('div');
+    saveBtnWrap.className = 'my-audit-btn-group';
+    saveBtnWrap.innerHTML = `<button class="my-audit-batch-btn" id="saveSettingsBtn">保存设置</button>`;
+    wrap.appendChild(saveBtnWrap);
+
+    container.appendChild(wrap);
+
+    // 设置面板事件绑定
+    document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+        const newCfg = {
+            grabRule: document.getElementById('grabRule').value,
+            grabFlag: document.getElementById('grabFlag').value,
+            scanIntervalMs: Number(document.getElementById('scanIntervalMs').value || 600),
+            maxPending: Number(document.getElementById('maxPending').value || 10),
+            grabMaxCount: Number(document.getElementById('grabMaxCount').value || 3),
+            emotionProb: Number(document.getElementById('emotionProb').value || 1.0),
+            mischiefProb: Number(document.getElementById('mischiefProb').value || 1.0),
+            cooldownMs: Number(document.getElementById('cooldownMs').value || 1200),
+            defaultSender: document.getElementById('defaultSender').value,
+            blockSensitive: document.getElementById('blockSensitive').checked,
+            sensitiveWords: document.getElementById('sensitiveWords').value
+        };
+        saveAuditSettings(newCfg);
+        alert('设置已保存');
+    });
+
+    document.getElementById('exportAllBtn').addEventListener('click', () => exportAllCards());
+    document.getElementById('exportFullBackupBtn').addEventListener('click', () => exportFullBackup());
+    document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFileInput').click());
+    document.getElementById('importBackupBtn').addEventListener('click', () => document.getElementById('importBackupFile').click());
+    document.getElementById('importFileInput').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if(!file) return;
+        const text = await file.text();
+        importCardJson(text);
+    });
+    document.getElementById('importBackupFile').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if(!file) return;
+        const text = await file.text();
+        restoreFullBackup(text);
+    });
+    document.getElementById('importTextBtn').addEventListener('click', () => {
+        const jsonStr = document.getElementById('importTextarea').value;
+        importCardJson(jsonStr);
+    });
+    document.getElementById('restoreBackupTextBtn').addEventListener('click', () => {
+        const jsonStr = document.getElementById('importTextarea').value;
+        restoreFullBackup(jsonStr);
+    });
+}
+
+// 配套底层函数声明（对接DB）
+function deleteCardBatch(uidArr) {
+    let list = loadAllCards();
+    list = list.filter(c => !uidArr.includes(c.uid));
+    saveAllCards(list);
+}
+function exportCardByUidList(uidArr) {
+    const all = loadAllCards();
+    const target = all.filter(c => uidArr.includes(c.uid));
+    downloadJsonFile(target, 'selected-cards.json');
+}
+function exportAllCards() {
+    const all = loadAllCards();
+    downloadJsonFile(all, 'all-cards.json');
+}
+function importCardJson(jsonStr) {
+    try {
+        const arr = JSON.parse(jsonStr);
+        if(!Array.isArray(arr)) throw new Error('必须是数组');
+        const old = loadAllCards();
+        const merge = [...old, ...arr];
+        saveAllCards(merge);
+        alert(`导入成功，新增 ${arr.length} 条`);
+        refreshAuditPanel();
+    } catch(err) {
+        alert('JSON解析失败：' + err.message);
+    }
+}
+function downloadJsonFile(obj, filename) {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ============================================================================
+// 第7段：剩余面板渲染、事件绑定、startGuard、结尾闭合
+// ============================================================================
+let activeTabKey = 'cards';
+let auditPanelRoot = null;
+
+// 渲染主审核面板容器 + Tab栏
+function renderAuditPanel() {
+    if (!auditPanelRoot) {
+        auditPanelRoot = document.createElement('div');
+        auditPanelRoot.id = 'my-audit-main-panel';
+        auditPanelRoot.style.position = 'fixed';
+        auditPanelRoot.style.right = '12px';
+        auditPanelRoot.style.bottom = '12px';
+        auditPanelRoot.style.width = '420px';
+        auditPanelRoot.style.background = '#ffffff';
+        auditPanelRoot.style.border = '1px solid #d1d5db';
+        auditPanelRoot.style.borderRadius = '10px';
+        auditPanelRoot.style.boxShadow = '0 4px 16px rgba(0,0,0,0.15)';
+        auditPanelRoot.style.zIndex = '99999';
+        auditPanelRoot.style.overflow = 'hidden';
+        document.body.appendChild(auditPanelRoot);
+    }
+    auditPanelRoot.innerHTML = '';
+
+    // Tab头部
+    const tabHeader = document.createElement('div');
+    tabHeader.style.display = 'flex';
+    tabHeader.style.background = '#f3f4f6';
+    tabHeader.style.borderBottom = '1px solid #e5e7eb';
+    tabHeader.innerHTML = `
+        <button class="audit-tab-btn ${activeTabKey==='cards'?'active':''}" data-tab="cards">字卡库</button>
+        <button class="audit-tab-btn ${activeTabKey==='report'?'active':''}" data-tab="report">审核报告</button>
+        <button class="audit-tab-btn ${activeTabKey==='settings'?'active':''}" data-tab="settings">设置</button>
+        <button class="audit-tab-btn close-btn" style="margin-left:auto;">×</button>
+    `;
+    auditPanelRoot.appendChild(tabHeader);
+
+    // Tab内容容器
+    const tabContentWrap = document.createElement('div');
+    tabContentWrap.id = 'audit-tab-content';
+    tabContentWrap.style.padding = '12px';
+    tabContentWrap.style.maxHeight = '480px';
+    tabContentWrap.style.overflowY = 'auto';
+    auditPanelRoot.appendChild(tabContentWrap);
+
+    // Tab切换样式
+    const tabStyle = document.createElement('style');
+    tabStyle.textContent = `
+        .audit-tab-btn {
+            padding: 8px 12px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size:13px;
+        }
+        .audit-tab-btn.active {
+            background:#fff;
+            font-weight:bold;
+            border-bottom:2px solid #3b82f6;
+        }
+        .audit-tab-btn.close-btn {
+            color:#ef4444;
+        }
+    `;
+    auditPanelRoot.appendChild(tabStyle);
+
+    // Tab切换事件
+    tabHeader.querySelectorAll('.audit-tab-btn').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+            if(btn.classList.contains('close-btn')){
+                auditPanelRoot.style.display = 'none';
+                return;
+            }
+            activeTabKey = btn.dataset.tab;
+            refreshAuditPanel();
+        })
+    })
+
+    // 根据激活Tab渲染对应内容
+    const allCards = loadAllCards();
+    const settings = getAuditSettings();
+    switch(activeTabKey){
+        case 'cards':
+            renderCardsTab(tabContentWrap, allCards);
+            break;
+        case 'report':
+            renderReportTab(tabContentWrap);
+            break;
+        case 'settings':
+            renderSettingsTab(tabContentWrap, settings);
+            break;
+    }
+}
+
+// 审核报告Tab渲染
+function renderReportTab(container){
+    container.innerHTML = '';
+    const reportList = loadAuditReport() || [];
+    const wrap = document.createElement('div');
+    if(reportList.length === 0){
+        wrap.innerHTML = '<div style="text-align:center;color:#666;padding:20px;">暂无审核记录</div>';
+    }else{
+        reportList.forEach(item=>{
+            const dom = document.createElement('div');
+            dom.style.borderBottom = '1px solid #eee';
+            dom.style.padding = '8px 0';
+            dom.innerHTML = `
+                <div style="font-size:12px;color:#666;">${escapeHtml(item.time || '')}</div>
+                <div style="font-size:13px;margin-top:4px;">类型：${escapeHtml(item.type || '-')}</div>
+                <div style="font-size:13px;">内容：${escapeHtml(item.text || '')}</div>
+            `;
+            wrap.appendChild(dom);
+        })
+    }
+    container.appendChild(wrap);
+}
+
+// 刷新面板入口
+function refreshAuditPanel(){
+    renderAuditPanel();
+}
+
+// 写入审核报告
+function pushAuditReport(record){
+    const list = loadAuditReport() || [];
+    list.unshift({
+        time: new Date().toLocaleString(),
+        ...record
+    });
+    // 限制最多保存50条报告
+    if(list.length > 50) list.length = 50;
+    saveAuditReport(list);
+}
+
+// 守护主循环，监听聊天变化、自动抓取
+function startGuard(){
+    appendExtraCss();
+    let lastChatSnapshot = '';
+    const guardTimer = setInterval(()=>{
+        // 加载锁校验，防止重复初始化
+        if(window.__MY_AUDIT_LOADED__ !== true){
+            clearInterval(guardTimer);
+            return;
+        }
+        const chatRoot = getChatRootElement();
+        if(!chatRoot) return;
+        checkAndRepairChat(chatRoot);
+        const rawText = chatRoot.innerText || '';
+        if(rawText === lastChatSnapshot) return;
+        lastChatSnapshot = rawText;
+        const grabResult = grabFromChat(rawText);
+        if(grabResult && grabResult.length > 0){
+            grabResult.forEach(async txt=>{
+                await autoSendCard(txt, chatRoot);
+                pushAuditReport({type:'自动抓取', text: txt});
+            })
+        }
+    }, 600);
+}
+
+// 工具占位：获取聊天根节点（对接原有逻辑）
+function getChatRootElement(){
+    return document.querySelector('.chat-container');
+}
+
+// 存储读写占位函数，对接原有localStorage持久层
+function loadAllCards(){
+    const raw = localStorage.getItem('my_audit_card_list');
+    try{ return raw ? JSON.parse(raw) : []; }catch{ return []; }
+}
+function saveAllCards(list){
+    localStorage.setItem('my_audit_card_list', JSON.stringify(list));
+}
+function getAuditSettings(){
+    const raw = localStorage.getItem('my_audit_settings');
+    const defaultCfg = {
+        grabRule: '\\[card:(.*?)\\]',
+        grabFlag: 'g',
+        cooldownMs: 1200,
+        defaultSender: '字卡助手',
+        blockSensitive: false,
+        sensitiveWords: ''
+    };
+    try{ return raw ? {...defaultCfg, ...JSON.parse(raw)} : defaultCfg; }catch{ return defaultCfg; }
+}
+function saveAuditSettings(cfg){
+    localStorage.setItem('my_audit_settings', JSON.stringify(cfg));
+}
+function loadAuditReport(){
+    const raw = localStorage.getItem('my_audit_report_log');
+    try{ return raw ? JSON.parse(raw) : []; }catch{ return []; }
+}
+function saveAuditReport(list){
+    localStorage.setItem('my_audit_report_log', JSON.stringify(list));
+}
+
+// URL参数 ?ma-show=1 自动唤起面板
+(function initEntry(){
+    const urlParams = new URLSearchParams(location.search);
+    if(urlParams.get('ma-show') === '1'){
+        setTimeout(()=>{
+            renderAuditPanel();
+            auditPanelRoot.style.display = 'block';
+        }, 300);
+    }
+})();
+
+// 原有自执行入口收尾，对齐原版结构
+if (window.__MY_AUDIT_LOADED__) {
+    console.log('[my-new-feature] 脚本已加载，跳过重复初始化');
+} else {
+    window.__MY_AUDIT_LOADED__ = true;
+    console.log('[my-new-feature] 初始化完成，启动守护');
     startGuard();
-  }
+}
+  // ============================================================================
+// 追加模块A1：safe安全隔离包装函数 【需求12：单个功能崩溃不炸整个脚本】
+// ============================================================================
+function safe(fn, fallback = null) {
+    try {
+        return fn();
+    } catch (err) {
+        if (isDebugMode()) {
+            console.error('[SAFE隔离捕获]', err);
+        }
+        return fallback;
+    }
+}
+function safeAsync(fn, fallback = null) {
+    return Promise.resolve(fn()).catch(err => {
+        if (isDebugMode()) {
+            console.error('[SAFE异步隔离捕获]', err);
+        }
+        return fallback;
+    });
+}
+// ============================================================================
+// 追加模块A2：调试日志开关 ?ma-debug=1 【需求11】
+// ============================================================================
+function isDebugMode() {
+    const urlParams = new URLSearchParams(location.search);
+    return urlParams.get('ma-debug') === '1';
+}
+function debugLog(...args) {
+    if (isDebugMode()) {
+        console.log('[DEBUG]', ...args);
+    }
+}
+// ============================================================================
+// 追加模块A3：approvePending 分支校验补全、边界兜底 【需求3】
+// ============================================================================
+function approvePending(pendingItem, pass = true) {
+    return safe(() => {
+        if (!pendingItem || !pendingItem.uid) {
+            debugLog('approvePending：传入pendingItem为空或缺少uid');
+            return false;
+        }
+        let pendingList = loadPendingList();
+        const targetIndex = pendingList.findIndex(p => p.uid === pendingItem.uid);
+        if (targetIndex === -1) {
+            debugLog('approvePending：找不到待审条目', pendingItem.uid);
+            return false;
+        }
+        const target = pendingList[targetIndex];
+        // 通过：移入字卡库；驳回：移入历史记录
+        if (pass) {
+            let allCards = loadAllCards();
+            allCards.push(target);
+            saveAllCards(allCards);
+            pushAuditReport({type: '审核通过', text: target.content});
+        } else {
+            let historyList = loadHistoryList();
+            historyList.unshift(target);
+            if (historyList.length > 50) historyList.length = 50;
+            saveHistoryList(historyList);
+            pushAuditReport({type: '审核驳回', text: target.content});
+        }
+        pendingList.splice(targetIndex, 1);
+        savePendingList(pendingList);
+        refreshAuditPanel();
+        return true;
+    }, false);
+}
+// 配套pending/history存储读写
+function loadPendingList() {
+    const raw = localStorage.getItem('my_audit_pending');
+    try { return raw ? JSON.parse(raw) : []; } catch { return []; }
+}
+function savePendingList(list) {
+    localStorage.setItem('my_audit_pending', JSON.stringify(list));
+}
+function loadHistoryList() {
+    const raw = localStorage.getItem('my_audit_history');
+    try { return raw ? JSON.parse(raw) : []; } catch { return []; }
+}
+function saveHistoryList(list) {
+    localStorage.setItem('my_audit_history', JSON.stringify(list));
+}
+// ============================================================================
+// 追加模块A5：全库备份导出恢复 + 审核报告导入导出【需求4、需求8】
+// ============================================================================
+function exportFullBackup() {
+    return safe(() => {
+        const backup = {
+            version: "1.0",
+            cards: loadAllCards(),
+            pending: loadPendingList(),
+            history: loadHistoryList(),
+            report: loadAuditReport(),
+            settings: getAuditSettings(),
+            groups: loadGroups()
+        };
+        downloadJsonFile(backup, `audit-full-backup-${new Date().getTime()}.json`);
+        pushAuditReport({type:'全库备份导出', text:'生成完整备份文件'});
+    });
+}
+function restoreFullBackup(jsonStr) {
+    return safe(() => {
+        const data = JSON.parse(jsonStr);
+        if (!data.version) throw new Error('备份文件格式不正确');
+        if (!confirm('确认覆盖当前所有本地数据，不可撤销？')) return;
+        saveAllCards(data.cards ?? []);
+        savePendingList(data.pending ?? []);
+        saveHistoryList(data.history ?? []);
+        saveAuditReport(data.report ?? []);
+        saveAuditSettings(data.settings ?? {});
+        saveGroups(data.groups ?? []);
+        refreshAuditPanel();
+        alert('备份恢复完成');
+        pushAuditReport({type:'全库备份恢复', text:'已覆盖本地数据'});
+    }, alert('备份恢复失败'));
+}
+// 审核报告导出导入
+function exportReportLog() {
+    const report = loadAuditReport();
+    downloadJsonFile(report, 'audit-report-log.json');
+}
+function importReportLog(jsonStr) {
+    safe(()=>{
+        const arr = JSON.parse(jsonStr);
+        if(!Array.isArray(arr)) throw new Error('报告必须是数组');
+        const old = loadAuditReport();
+        const merged = [...arr, ...old];
+        if(merged.length>50) merged.length=50;
+        saveAuditReport(merged);
+        refreshAuditPanel();
+        alert('审核报告导入成功');
+    });
+}
+// 分组存储（兼容原有分组功能）
+function loadGroups() {
+    const raw = localStorage.getItem('my_audit_groups');
+    try { return raw ? JSON.parse(raw) : []; } catch { return []; }
+}
+function saveGroups(g) {
+    localStorage.setItem('my_audit_groups', JSON.stringify(g));
+}
+// ============================================================================
+// 追加模块A6：悬浮球拖拽、分组、双端禁用标记、历史档案【需求13】
+// ============================================================================
+function createFloatBall() {
+    return safe(()=>{
+        const ballId = 'my-audit-float-ball';
+        if(document.getElementById(ballId)) return;
+        const ball = document.createElement('div');
+        ball.id = ballId;
+        ball.innerText = '📋';
+        ball.style.position = 'fixed';
+        ball.style.right = '16px';
+        ball.style.bottom = '80px';
+        ball.style.width = '40px';
+        ball.style.height = '40px';
+        ball.style.borderRadius = '50%';
+        ball.style.background = '#3b82f6';
+        ball.style.color = '#fff';
+        ball.style.display = 'flex';
+        ball.style.alignItems = 'center';
+        ball.style.justifyContent = 'center';
+        ball.style.zIndex = '999999';
+        ball.style.cursor = 'move';
+        document.body.appendChild(ball);
+        // 拖拽逻辑
+        let drag = false, ox, oy;
+        ball.addEventListener('mousedown', e=>{
+            drag = true;
+            ox = e.clientX - ball.offsetLeft;
+            oy = e.clientY - ball.offsetTop;
+        });
+        window.addEventListener('mousemove', e=>{
+            if(!drag) return;
+            ball.style.left = (e.clientX - ox)+'px';
+            ball.style.right = 'auto';
+            ball.style.top = (e.clientY - oy)+'px';
+            ball.style.bottom = 'auto';
+        });
+        window.addEventListener('mouseup', ()=> drag=false);
+        // 点击唤起面板
+        ball.addEventListener('click', ()=>{
+            if(!auditPanelRoot) renderAuditPanel();
+            auditPanelRoot.style.display = auditPanelRoot.style.display === 'none' ? 'block' : 'none';
+        });
+    });
+}
+// 在 startGuard 里面启动悬浮球
+const oldStartGuard = startGuard;
+startGuard = function(){
+    oldStartGuard();
+    createFloatBall();
+};
+// ============================================================================
+// 追加模块A7：新版startGuard，适配新增引擎参数、概率判断、最大待审限制
+// ============================================================================
+function startGuard(){
+    appendExtraCss();
+    createFloatBall();
+    let lastChatSnapshot = '';
+    const cfg = getAuditSettings();
+    const guardTimer = setInterval(()=>{
+        if(window.__MY_AUDIT_LOADED__ !== true){
+            clearInterval(guardTimer);
+            return;
+        }
+        const chatRoot = getChatRootElement();
+        if(!chatRoot) return;
+        checkAndRepairChat(chatRoot);
+        const rawText = chatRoot.innerText || '';
+        if(rawText === lastChatSnapshot) return;
+        lastChatSnapshot = rawText;
+        const grabResult = grabFromChat(rawText);
+        if(grabResult && grabResult.length > 0){
+            const pendingList = loadPendingList();
+            if(pendingList.length >= cfg.maxPending) {
+                debugLog('待审队列已满，跳过抓取');
+                return;
+            }
+            const take = grabResult.slice(0, cfg.grabMaxCount);
+            take.forEach(async txt=>{
+                // 概率判断
+                const emotionHit = Math.random() <= cfg.emotionProb;
+                const mischiefHit = Math.random() <= cfg.mischiefProb;
+                if(!emotionHit || !mischiefHit) {
+                    debugLog('概率未命中，跳过本条');
+                    return;
+                }
+                await autoSendCard(txt, chatRoot);
+                pushAuditReport({type:'自动抓取', text: txt});
+            })
+        }
+    }, getAuditSettings().scanIntervalMs);
+}
 })();
