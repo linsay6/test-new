@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Mochi梦角字卡·双人审核完整版
 // @namespace    https://github.com/yourname/yourrepo
-// @version      3.1.0
-// @description  九宫格审核图标、悬浮球、梦角引擎、双人审批、审核报告字卡Tab（修复角标/发送/移动端/样式对齐）
+// @version      3.2.0
+// @description  九宫格审核图标、悬浮球、梦角引擎、双人审批、审核报告字卡Tab、圆形/方形裁剪、移动端顺滑拖拽
 // @author       You
 // @match        *://*/*
 // @grant        none
@@ -15,13 +15,11 @@
      ============================================================ */
   const STORAGE_CHAT_KEY = 'xy-home-v2:default:chat-msgs';
   const STORAGE_AUDIT_KEY = 'my-audit-cards';
-  // 审核图标 .app-ico 内的默认 svg
   const DEFAULT_ICON_SVG =
     '<svg viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
     '<path d="M12 20h9"></path>' +
     '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
     '</svg>';
-  // 原生九宫格图标完整 DOM（严格还原，不改原生 class）
   const AUDIT_ICON_TEMPLATE =
     '<div class="app" data-app="audit" data-desk-widget="app-audit">' +
       '<div class="app-ico">' + DEFAULT_ICON_SVG + '</div>' +
@@ -69,7 +67,6 @@
       }
     };
   }
-  // 兼容旧版 groups + 扁平 cards 结构，自动迁移到 categories 嵌套结构
   function migrateLegacy(raw) {
     try {
       if (!raw || typeof raw !== 'object') return null;
@@ -111,7 +108,6 @@
       return null;
     }
   }
-  // 统一 pending 申请项字段
   function normalizePending(p) {
     const actionMap = { add: 'add', delete: 'delete', disable: 'disable', move: 'move', migrate: 'move', restore: 'restore' };
     const action = actionMap[p.action] || actionMap[p.type] || 'add';
@@ -192,7 +188,6 @@
       console.warn('[Audit] CSS注入失败', e);
     }
   }
-  // 轻提示，替代 alert 的阻塞提示
   function toast(msg, color) {
     try {
       let box = document.getElementById('audit-toast');
@@ -211,7 +206,6 @@
       box._timer = setTimeout(() => { box.style.opacity = '0'; }, 2200);
     } catch (e) {}
   }
-  // 全局状态
   const state = loadData();
   window.__MY_AUDIT__ = {
     data: state,
@@ -231,7 +225,7 @@
     .app[data-app="audit"] { position: relative; }
     .app[data-app="audit"] .app-ico img {
       width: 100%; height: 100%; object-fit: cover;
-      border-radius: 6px; display: block;
+      border-radius: 14px; display: block;
     }
     .audit-badge {
       position: absolute; top: 4px; right: 4px;
@@ -255,26 +249,44 @@
       75% { transform: translateX(2px); }
     }
 
-    /* ---------- 悬浮球 + 角标（修复问题1） ---------- */
+    /* ---------- 悬浮球（修复问题2：角标外露 / 问题4：顺滑） ---------- */
     #audit-floating-ball {
       position: fixed; left: 0; top: 0;
-      border-radius: 50%; overflow: hidden;
-      cursor: pointer; user-select: none; touch-action: none;
+      border-radius: 50%;
+      overflow: visible;
+      cursor: pointer; user-select: none;
+      touch-action: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
       box-shadow: none;
       will-change: transform;
       transform: translate3d(0,0,0);
       z-index: 99990;
-      display: flex; align-items: center; justify-content: center;
       color: #fff; font-size: 20px;
     }
-    #audit-floating-ball:active { cursor: grabbing; }
-    #audit-floating-ball img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    #audit-floating-ball .audit-badge {
-      top: -2px; right: -2px;
-      min-width: 16px; height: 16px; line-height: 14px;
-      font-size: 10px; padding: 0 3px;
-      background: #ef4444; color: #fff; border-color: #fff;
+    #audit-floating-ball .ball-bg {
+      width: 100%; height: 100%; border-radius: 50%;
+      overflow: hidden; display: flex; align-items: center; justify-content: center;
+      background: inherit;
+      pointer-events: none;
+      font-size: 20px;
+      color: #fff;
     }
+    #audit-floating-ball img {
+      width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%;
+    }
+    #audit-floating-ball .audit-badge {
+      position: absolute;
+      top: -4px; right: -4px;
+      min-width: 18px; height: 18px; line-height: 16px;
+      font-size: 11px; padding: 0 4px;
+      background: #ef4444; color: #fff;
+      border: 2px solid #fff;
+      border-radius: 9px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+      box-sizing: content-box;
+    }
+    #audit-floating-ball .audit-badge[data-count="0"] { display: none !important; }
 
     /* ---------- 审核面板 ---------- */
     #audit-panel-mask {
@@ -308,6 +320,7 @@
       border-radius: 9px; font-size: 11px; font-weight: normal;
       text-align: center; vertical-align: middle;
     }
+    .audit-tab-badge[hidden] { display: none !important; }
     .audit-tab-content { flex: 1; overflow-y: auto; padding: 14px 18px; }
     .audit-tab-pane { display: none; }
     .audit-tab-pane.active { display: block; }
@@ -366,7 +379,7 @@
     .result-approve { color: #166534; }
     .result-reject { color: #991b1b; }
 
-    /* ---------- 设置（修复问题6：控件右对齐） ---------- */
+    /* ---------- 设置 ---------- */
     .settings-section { margin-bottom: 18px; }
     .settings-section h4 { margin: 0 0 10px; font-size: 13px; color: #374151; }
     .settings-row {
@@ -386,24 +399,56 @@
       border-radius: 4px; padding: 0; cursor: pointer;
     }
     .icon-preview {
-      width: 44px; height: 44px; border-radius: 8px; border: 1px solid #e5e7eb;
+      width: 44px; height: 44px;
       overflow: hidden; display: flex; align-items: center; justify-content: center;
       background: #fff; flex-shrink: 0;
     }
     .icon-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .icon-preview.rect { border-radius: 8px; }
-    .icon-preview.circle { border-radius: 50%; }
+    .icon-preview.rect { border-radius: 14px; border: 1px solid #e5e7eb; }
+    .icon-preview.circle { border-radius: 50%; border: 1px solid #e5e7eb; }
 
-    /* ---------- 注入气泡 ---------- */
-    [data-ma-injected="1"] { pointer-events: auto; }
+    /* ---------- 图片裁剪弹窗 ---------- */
+    .audit-cropper-modal {
+      position: fixed; inset: 0; background: rgba(0,0,0,.55);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100003;
+    }
+    .audit-cropper-box {
+      background: #fff; border-radius: 14px; padding: 18px;
+      width: 340px; max-width: 92vw;
+      box-shadow: 0 20px 40px rgba(0,0,0,.2);
+    }
+    .audit-cropper-header {
+      font-weight: 600; font-size: 14px; margin-bottom: 14px; text-align: center;
+      color: #111827;
+    }
+    .audit-cropper-canvas-wrap {
+      position: relative;
+      width: 220px; height: 220px;
+      margin: 0 auto 14px;
+      background: #f3f4f6;
+      overflow: hidden;
+    }
+    .audit-cropper-canvas { display: block; width: 220px; height: 220px; }
+    .audit-cropper-mask {
+      position: absolute; inset: 0; pointer-events: none;
+      box-shadow: 0 0 0 2000px rgba(0,0,0,.35);
+    }
+    .audit-cropper-mask.circle { border-radius: 50%; }
+    .audit-cropper-mask.square { border-radius: 14px; }
+    .audit-cropper-slider-wrap { padding: 0 10px; margin-bottom: 14px; }
+    .audit-cropper-slider-wrap input[type="range"] { width: 100%; }
+    .audit-cropper-btns { display: flex; gap: 8px; justify-content: center; }
+    .audit-cropper-btns .audit-btn { flex: 1; padding: 8px; }
+    .audit-cropper-btns .audit-btn-primary { background: #f43f5e; border-color: #f43f5e; }
+    .audit-cropper-btns .audit-btn-primary:hover { background: #e11d48; }
 
-    /* ---------- 模块二：页面内字卡库 Tab ---------- */
+    /* ---------- 模块二：字卡库 Tab ---------- */
     #cc-sect-audit {
       display: flex; flex-direction: column; gap: 10px;
       box-sizing: border-box; padding: 2px 0 12px;
     }
     #cc-sect-audit[hidden] { display: none !important; }
-    /* 修复问题3：Tab激活黑底白字 + 角标 */
     [data-ccsel].cc-tab-active,
     .cc-tab-active {
       background: #000 !important;
@@ -470,7 +515,7 @@
     let engineTimer = null;
     let engineLock = false;
     let observerTimer = null;
-    const injectedRegistry = []; // 注入气泡登记表，最多 50 条
+    const injectedRegistry = [];
 
     /* ---------------- 图标 ---------------- */
     function getDeskContainer() {
@@ -511,11 +556,12 @@
           }
           badge.dataset.count = String(count);
           badge.textContent = count > 99 ? '99+' : String(count);
+          badge.style.display = count === 0 ? 'none' : '';
         });
-        // 悬浮球角标（修复问题1）
+        // 悬浮球角标（修复问题2：在外围圆角外露）
         const ball = document.getElementById('audit-floating-ball');
         if (ball) {
-          let badge = ball.querySelector('.audit-badge');
+          let badge = ball.querySelector(':scope > .audit-badge');
           if (!badge) {
             badge = document.createElement('span');
             badge.className = 'audit-badge';
@@ -523,6 +569,18 @@
           }
           badge.dataset.count = String(count);
           badge.textContent = count > 99 ? '99+' : String(count);
+          badge.style.display = count === 0 ? 'none' : '';
+        }
+        // 面板 Tab 角标（修复问题1：数量 0 时隐藏）
+        const tabBadge = document.querySelector('.audit-tab[data-tab="pending"] .audit-tab-badge');
+        if (tabBadge) {
+          if (count === 0) {
+            tabBadge.hidden = true;
+            tabBadge.textContent = '';
+          } else {
+            tabBadge.hidden = false;
+            tabBadge.textContent = count > 99 ? '99+' : String(count);
+          }
         }
       } catch (e) {
         console.warn('[Audit] 角标更新失败', e);
@@ -548,7 +606,7 @@
       }
     }
 
-    /* ---------------- 悬浮球（修复问题7移动端点击） ---------------- */
+    /* ---------------- 悬浮球（修复问题4：移动端顺滑） ---------------- */
     function getBallPos() {
       const s = window.__MY_AUDIT__.data.settings.floatingBall;
       const size = s.size || 56;
@@ -570,10 +628,20 @@
         ball.style.height = s.size + 'px';
         ball.style.background = s.color || '#3b82f6';
         ball.style.transform = 'translate3d(' + pos.x + 'px,' + pos.y + 'px,0)';
+        // 保证 ball-bg 存在，角标不放在 ball-bg 内（可外露）
+        let inner = ball.querySelector(':scope > .ball-bg');
+        if (!inner) {
+          ball.innerHTML = '';
+          inner = document.createElement('div');
+          inner.className = 'ball-bg';
+          ball.appendChild(inner);
+        }
+        inner.style.background = s.color || '#3b82f6';
+        inner.style.fontSize = Math.max(14, Math.floor((s.size || 56) * 0.4)) + 'px';
         if (s.avatar) {
-          ball.innerHTML = '<img src="' + s.avatar + '" alt="">';
+          inner.innerHTML = '<img src="' + s.avatar + '" alt="">';
         } else {
-          ball.innerHTML = '✍';
+          inner.innerHTML = '✍';
         }
         const forceShow = new URLSearchParams(window.location.search).get('show_audit') === 'true';
         ball.style.display = (s.enabled || forceShow) ? 'flex' : 'none';
@@ -593,6 +661,18 @@
           let dragging = false;
           let moved = false;
           let sx = 0, sy = 0, bx = 0, by = 0;
+          let rafId = null;
+          let pendingX = null, pendingY = null;
+
+          const applyFrame = function () {
+            rafId = null;
+            if (pendingX == null || pendingY == null) return;
+            ball.style.transform = 'translate3d(' + pendingX + 'px,' + pendingY + 'px,0)';
+            try {
+              window.__MY_AUDIT__.data.settings.floatingBall.position = { x: pendingX, y: pendingY };
+            } catch (e) {}
+            pendingX = pendingY = null;
+          };
 
           const onDown = function (e) {
             try {
@@ -613,13 +693,14 @@
               const p = e.touches ? e.touches[0] : e;
               const dx = p.clientX - sx;
               const dy = p.clientY - sy;
-              if (Math.abs(dx) > 10 || Math.abs(dy) > 10) moved = true;
+              if (Math.abs(dx) > 6 || Math.abs(dy) > 6) moved = true;
               const size = window.__MY_AUDIT__.data.settings.floatingBall.size || 56;
               const nx = Math.min(Math.max(0, bx + dx), Math.max(0, window.innerWidth - size));
               const ny = Math.min(Math.max(0, by + dy), Math.max(0, window.innerHeight - size));
-              ball.style.transform = 'translate3d(' + nx + 'px,' + ny + 'px,0)';
-              window.__MY_AUDIT__.data.settings.floatingBall.position = { x: nx, y: ny };
-              if (moved && e.cancelable) e.preventDefault();
+              pendingX = nx;
+              pendingY = ny;
+              if (!rafId) rafId = requestAnimationFrame(applyFrame);
+              if (e.cancelable) e.preventDefault();
             } catch (err) {}
           };
           const onUp = function () {
@@ -635,6 +716,7 @@
           document.addEventListener('touchmove', onMove, { passive: false });
           document.addEventListener('mouseup', onUp);
           document.addEventListener('touchend', onUp);
+          document.addEventListener('touchcancel', onUp);
 
           // 点击事件：只有没拖拽才触发
           ball.addEventListener('click', function (e) {
@@ -652,6 +734,123 @@
       }
     }
 
+    /* ---------------- 图片裁剪弹窗（问题3：圆形/方形） ---------------- */
+    function openCropper(opts) {
+      try {
+        const file = opts.file;
+        const shape = opts.shape === 'circle' ? 'circle' : 'square';
+        const outSize = opts.size || [192, 192];
+        const onConfirm = opts.onConfirm;
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const img = new Image();
+          img.onload = function () {
+            try {
+              const CANVAS = 220;
+              const modal = document.createElement('div');
+              modal.className = 'audit-cropper-modal';
+              modal.innerHTML =
+                '<div class="audit-cropper-box">' +
+                  '<div class="audit-cropper-header">裁剪' + (shape === 'circle' ? '悬浮球头像' : '九宫格图标') + '</div>' +
+                  '<div class="audit-cropper-canvas-wrap">' +
+                    '<canvas class="audit-cropper-canvas" width="' + CANVAS + '" height="' + CANVAS + '"></canvas>' +
+                    '<div class="audit-cropper-mask ' + shape + '"></div>' +
+                  '</div>' +
+                  '<div class="audit-cropper-slider-wrap">' +
+                    '<input type="range" min="1" max="3" step="0.01" value="1">' +
+                  '</div>' +
+                  '<div class="audit-cropper-btns">' +
+                    '<button class="audit-btn audit-cancel">取消</button>' +
+                    '<button class="audit-btn audit-btn-primary audit-confirm">确认</button>' +
+                  '</div>' +
+                '</div>';
+              document.body.appendChild(modal);
+              const canvas = modal.querySelector('canvas');
+              const ctx = canvas.getContext('2d');
+              const slider = modal.querySelector('input[type="range"]');
+              let zoom = 1;
+              let offsetX = 0, offsetY = 0;
+              let dragging = false, dsx = 0, dsy = 0, dox = 0, doy = 0;
+
+              function draw() {
+                ctx.clearRect(0, 0, CANVAS, CANVAS);
+                const minScale = Math.max(CANVAS / img.width, CANVAS / img.height);
+                const scale = minScale * zoom;
+                const drawW = img.width * scale;
+                const drawH = img.height * scale;
+                const dx = (CANVAS - drawW) / 2 + offsetX;
+                const dy = (CANVAS - drawH) / 2 + offsetY;
+                ctx.drawImage(img, dx, dy, drawW, drawH);
+              }
+              slider.oninput = function () {
+                zoom = Number(slider.value);
+                draw();
+              };
+              // 拖动平移
+              const startDrag = function (e) {
+                const p = e.touches ? e.touches[0] : e;
+                dragging = true;
+                dsx = p.clientX; dsy = p.clientY;
+                dox = offsetX; doy = offsetY;
+              };
+              const moveDrag = function (e) {
+                if (!dragging) return;
+                const p = e.touches ? e.touches[0] : e;
+                offsetX = dox + (p.clientX - dsx);
+                offsetY = doy + (p.clientY - dsy);
+                draw();
+                if (e.cancelable && e.touches) e.preventDefault();
+              };
+              const endDrag = function () { dragging = false; };
+              canvas.addEventListener('mousedown', startDrag);
+              canvas.addEventListener('touchstart', startDrag, { passive: true });
+              document.addEventListener('mousemove', moveDrag);
+              document.addEventListener('touchmove', moveDrag, { passive: false });
+              document.addEventListener('mouseup', endDrag);
+              document.addEventListener('touchend', endDrag);
+
+              modal.querySelector('.audit-cancel').onclick = function () { modal.remove(); };
+              modal.querySelector('.audit-confirm').onclick = function () {
+                try {
+                  const out = document.createElement('canvas');
+                  out.width = outSize[0];
+                  out.height = outSize[1];
+                  const octx = out.getContext('2d');
+                  if (shape === 'circle') {
+                    octx.beginPath();
+                    octx.arc(outSize[0] / 2, outSize[1] / 2, Math.min(outSize[0], outSize[1]) / 2, 0, Math.PI * 2);
+                    octx.clip();
+                  }
+                  const scaleOut = outSize[0] / CANVAS;
+                  const minScale = Math.max(CANVAS / img.width, CANVAS / img.height);
+                  const scale = minScale * zoom;
+                  const drawW = img.width * scale;
+                  const drawH = img.height * scale;
+                  const dx = (CANVAS - drawW) / 2 + offsetX;
+                  const dy = (CANVAS - drawH) / 2 + offsetY;
+                  octx.drawImage(img, dx * scaleOut, dy * scaleOut, drawW * scaleOut, drawH * scaleOut);
+                  onConfirm(out.toDataURL('image/png'));
+                  modal.remove();
+                } catch (err) {
+                  console.warn('[Audit] 裁剪导出失败', err);
+                }
+              };
+              draw();
+            } catch (err) {
+              console.warn('[Audit] 裁剪面板创建失败', err);
+            }
+          };
+          img.onerror = function () { toast('图片读取失败', '#b91c1c'); };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      } catch (e) {
+        console.warn('[Audit] 图片处理失败', e);
+      }
+    }
+
     /* ---------------- 面板 ---------------- */
     function openAuditPanel(defaultTab) {
       try {
@@ -665,7 +864,7 @@
                 '<button class="audit-panel-close">×</button>' +
               '</div>' +
               '<div class="audit-tabs">' +
-                '<button class="audit-tab" data-tab="pending">待审核 <span class="audit-tab-badge">0</span></button>' +
+                '<button class="audit-tab" data-tab="pending">待审核 <span class="audit-tab-badge" hidden></span></button>' +
                 '<button class="audit-tab" data-tab="cardlib">字卡库</button>' +
                 '<button class="audit-tab" data-tab="history">历史档案</button>' +
                 '<button class="audit-tab" data-tab="settings">设置</button>' +
@@ -710,12 +909,11 @@
         if (target === 'cardlib') renderCardlibPane();
         if (target === 'history') renderHistory();
         if (target === 'settings') renderSettings();
+        // 无论哪个 Tab，都同步角标
+        updateBadge();
       } catch (e) {
         console.warn('[Audit] 面板打开失败', e);
       }
-    }
-    function closeAuditPanel() {
-      try { if (panelMask) panelMask.style.display = 'none'; } catch (e) {}
     }
 
     const ACTION_LABEL = { add: '新增', delete: '删除', disable: '禁用', move: '迁移', restore: '恢复启用' };
@@ -742,9 +940,17 @@
       try {
         const pane = panelMask.querySelector('[data-pane="pending"]');
         const list = window.__MY_AUDIT__.data.pending;
-        // 更新Tab角标（修复问题2）
+        // 更新Tab角标（问题1：数量 0 时隐藏）
         const tabBadge = panelMask.querySelector('.audit-tab[data-tab="pending"] .audit-tab-badge');
-        if (tabBadge) tabBadge.textContent = list.length > 99 ? '99+' : String(list.length);
+        if (tabBadge) {
+          if (list.length === 0) {
+            tabBadge.hidden = true;
+            tabBadge.textContent = '';
+          } else {
+            tabBadge.hidden = false;
+            tabBadge.textContent = list.length > 99 ? '99+' : String(list.length);
+          }
+        }
 
         if (!list.length) {
           pane.innerHTML = '<div style="text-align:center;color:#9ca3af;padding:40px 0;">暂无待审核申请</div>';
@@ -1110,12 +1316,20 @@
           pane.querySelector('#icon-upload').click();
         };
         pane.querySelector('#icon-upload').onchange = function (e) {
-          processImage(e.target.files[0], 96, 96, function (base64) {
-            window.__MY_AUDIT__.data.settings.iconCustom = base64;
-            window.__MY_AUDIT__.save();
-            renderSettings();
-            ensureAuditIcon();
-            toast('图标已更新');
+          const file = e.target.files && e.target.files[0];
+          e.target.value = '';
+          if (!file) return;
+          openCropper({
+            file: file,
+            shape: 'square',
+            size: [192, 192],
+            onConfirm: function (base64) {
+              window.__MY_AUDIT__.data.settings.iconCustom = base64;
+              window.__MY_AUDIT__.save();
+              renderSettings();
+              ensureAuditIcon();
+              toast('图标已更新');
+            }
           });
         };
         pane.querySelector('#icon-reset').onclick = function () {
@@ -1173,14 +1387,22 @@
           pane.querySelector('#ball-avatar-upload').click();
         };
         pane.querySelector('#ball-avatar-upload').onchange = function (e) {
-          processImage(e.target.files[0], 128, 128, function (base64) {
-            fb.avatar = base64;
-            window.__MY_AUDIT__.save();
-            renderSettings();
-            const ball = document.getElementById('audit-floating-ball');
-            if (ball) paintBall(ball);
-            toast('头像已更新');
-          }, true);
+          const file = e.target.files && e.target.files[0];
+          e.target.value = '';
+          if (!file) return;
+          openCropper({
+            file: file,
+            shape: 'circle',
+            size: [192, 192],
+            onConfirm: function (base64) {
+              fb.avatar = base64;
+              window.__MY_AUDIT__.save();
+              renderSettings();
+              const ball = document.getElementById('audit-floating-ball');
+              if (ball) paintBall(ball);
+              toast('头像已更新');
+            }
+          });
         };
         pane.querySelector('#ball-avatar-reset').onclick = function () {
           fb.avatar = null;
@@ -1217,7 +1439,8 @@
           pane.querySelector('#data-import').click();
         };
         pane.querySelector('#data-import').onchange = function (e) {
-          const file = e.target.files[0];
+          const file = e.target.files && e.target.files[0];
+          e.target.value = '';
           if (!file) return;
           const reader = new FileReader();
           reader.onload = function (ev) {
@@ -1247,43 +1470,8 @@
         console.warn('[Audit] 设置渲染失败', e);
       }
     }
-    // Canvas 裁剪转 base64；circle=true 时圆形裁剪
-    function processImage(file, width, height, callback, circle) {
-      try {
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = function (e) {
-          const img = new Image();
-          img.onload = function () {
-            try {
-              const canvas = document.createElement('canvas');
-              canvas.width = width;
-              canvas.height = height;
-              const ctx = canvas.getContext('2d');
-              if (circle) {
-                ctx.beginPath();
-                ctx.arc(width / 2, height / 2, width / 2, 0, Math.PI * 2);
-                ctx.clip();
-              }
-              const ratio = Math.max(width / img.width, height / img.height);
-              const dx = (width - img.width * ratio) / 2;
-              const dy = (height - img.height * ratio) / 2;
-              ctx.drawImage(img, dx, dy, img.width * ratio, img.height * ratio);
-              callback(canvas.toDataURL('image/png'));
-            } catch (err) {
-              console.warn('[Audit] 图片裁剪失败', err);
-            }
-          };
-          img.onerror = function () { toast('图片读取失败', '#b91c1c'); };
-          img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-      } catch (e) {
-        console.warn('[Audit] 图片处理失败', e);
-      }
-    }
 
-    /* ---------------- 消息发送（修复问题4：气泡注入） ---------------- */
+    /* ---------------- 消息发送（修复问题6：无容器也写存储，F5 后可恢复） ---------------- */
     function getNativeBubbleStyle(side) {
       try {
         const selectors = side === 'in'
@@ -1307,7 +1495,7 @@
     }
     function getChatContainer() {
       return document.querySelector(
-        '.chat-container, .msg-list, .chat-messages, .chat-list, [data-chat-container], .message-list, .chat-box, .chat-scroll'
+        '.chat-container, .msg-list, .chat-messages, .chat-list, [data-chat-container], .message-list, .chat-box, .chat-scroll, .chat-msgs, .messages-wrap, .chat-panel'
       );
     }
     function buildInjectedNode(text, side, style) {
@@ -1352,7 +1540,8 @@
       try {
         if (!text) return false;
         const s = side === 'in' || side === 'out' ? side : 'in';
-        // 第一层：原生渲染 API（存在则优先）
+
+        // 一、先尝试原生渲染 API
         if (typeof window.__nativeRenderBubble === 'function') {
           try {
             window.__nativeRenderBubble(text, s);
@@ -1362,17 +1551,21 @@
             return true;
           } catch (e) {}
         }
-        // 第二层：手搓气泡
+
+        // 二、无容器也先写存储（问题6：F5 后原页面读取聊天记录时可恢复）
+        writeChatStorage(text, s);
+
+        // 三、手搓气泡上屏
         const container = getChatContainer();
         if (!container) {
-          console.warn('[Audit] 未找到聊天容器，跳过气泡注入');
+          console.warn('[Audit] 未找到聊天容器，气泡未上屏（已写入聊天存储）');
+          injectedRegistry.push({ text: text, side: s, time: Date.now() });
+          trimRegistry();
           return false;
         }
         const style = getNativeBubbleStyle(s) || fallbackStyle(s);
         container.appendChild(buildInjectedNode(text, s, style));
         try { container.scrollTop = container.scrollHeight; } catch (e) {}
-        // 第三层：双写存储
-        writeChatStorage(text, s);
         injectedRegistry.push({ text: text, side: s, time: Date.now() });
         trimRegistry();
         return true;
@@ -1387,31 +1580,77 @@
     function writeChatStorage(text, side) {
       try {
         const raw = localStorage.getItem(STORAGE_CHAT_KEY);
+        let parsed = null;
         let list = [];
+        let wrapped = false;
         if (raw) {
-          let parsed;
           try { parsed = JSON.parse(raw); }
           catch (e) {
-            console.warn('[Audit] 聊天记录损坏，放弃本次写入', e);
+            console.warn('[Audit] 聊天记录损坏，放弃本次写入');
             return;
           }
-          if (!Array.isArray(parsed)) {
+          if (Array.isArray(parsed)) {
+            list = parsed;
+          } else if (parsed && Array.isArray(parsed.messages)) {
+            list = parsed.messages;
+            wrapped = true;
+          } else {
             console.warn('[Audit] 聊天记录格式异常，放弃本次写入');
             return;
           }
-          list = parsed;
         }
-        list.push({
-          side: side,
-          text: text,
-          content: text,
-          time: Date.now(),
-          isInjected: true
-        });
+        const now = Date.now();
+        // 依据现有样例推断字段格式
+        const sample = list.length ? list[list.length - 1] : null;
+        let entry;
+        if (sample && typeof sample === 'object' && ('role' in sample)) {
+          entry = {
+            role: side === 'in' ? 'assistant' : 'user',
+            content: text,
+            text: text,
+            time: now,
+            isInjected: true
+          };
+        } else if (sample && typeof sample === 'object' && ('isUser' in sample)) {
+          entry = {
+            isUser: side === 'out',
+            text: text,
+            content: text,
+            time: now,
+            isInjected: true
+          };
+        } else if (sample && typeof sample === 'object' && ('side' in sample)) {
+          entry = {
+            id: genId(),
+            side: side,
+            text: text,
+            content: text,
+            time: now,
+            isInjected: true
+          };
+        } else {
+          // 未知格式，同时提供多个字段名，尽量兼容
+          entry = {
+            id: genId(),
+            side: side,
+            role: side === 'in' ? 'assistant' : 'user',
+            text: text,
+            content: text,
+            time: now,
+            timestamp: now,
+            isInjected: true
+          };
+        }
+        list.push(entry);
         while (list.length > 2000) list.shift();
-        localStorage.setItem(STORAGE_CHAT_KEY, JSON.stringify(list));
+        if (wrapped) {
+          parsed.messages = list;
+          localStorage.setItem(STORAGE_CHAT_KEY, JSON.stringify(parsed));
+        } else {
+          localStorage.setItem(STORAGE_CHAT_KEY, JSON.stringify(list));
+        }
       } catch (e) {
-        console.warn('[Audit] 聊天存储写入失败，放弃写入避免污染', e);
+        console.warn('[Audit] 聊天存储写入失败', e);
       }
     }
     function checkAndRepairChat() {
@@ -1445,6 +1684,37 @@
         console.warn('[Audit] 气泡巡检失败', e);
       }
     }
+    // 首次加载时，从存储里恢复本脚本注入的消息（解决 F5 后注入气泡丢失）
+    function restoreInjectedFromStorage() {
+      try {
+        const container = getChatContainer();
+        if (!container) return;
+        const raw = localStorage.getItem(STORAGE_CHAT_KEY);
+        if (!raw) return;
+        let list;
+        try { list = JSON.parse(raw); }
+        catch (e) { return; }
+        if (list && !Array.isArray(list) && Array.isArray(list.messages)) list = list.messages;
+        if (!Array.isArray(list)) return;
+        const existingTexts = new Set();
+        container.querySelectorAll('[data-ma-injected="1"]').forEach(function (n) {
+          const bubble = n.querySelector('div:nth-child(2) > div:last-child');
+          if (bubble) existingTexts.add(bubble.textContent);
+        });
+        const injectList = list.filter(function (m) { return m && (m.isInjected || m.maInjected); });
+        injectList.forEach(function (m) {
+          const text = m.text || m.content;
+          if (!text || existingTexts.has(text)) return;
+          const side = m.side || (m.role === 'user' || m.isUser ? 'out' : 'in');
+          const style = getNativeBubbleStyle(side) || fallbackStyle(side);
+          container.appendChild(buildInjectedNode(text, side, style));
+          existingTexts.add(text);
+        });
+        try { container.scrollTop = container.scrollHeight; } catch (e) {}
+      } catch (e) {
+        console.warn('[Audit] 恢复注入气泡失败', e);
+      }
+    }
     window.sendAuditCard = injectBubbleToChat;
 
     /* ---------------- 梦角引擎 ---------------- */
@@ -1463,19 +1733,21 @@
     function pendingFull() {
       return window.__MY_AUDIT__.data.pending.length >= window.__MY_AUDIT__.data.settings.dreamEngine.maxPending;
     }
-    // 抓取用户发言 → 新增申请
     function autoGrabChat() {
       try {
         const raw = localStorage.getItem(STORAGE_CHAT_KEY);
         if (!raw) return;
         let list;
         try { list = JSON.parse(raw); } catch (e) { return; }
+        if (list && !Array.isArray(list) && Array.isArray(list.messages)) list = list.messages;
         if (!Array.isArray(list)) return;
         const now = Date.now();
         const windowMs = 15 * 60 * 1000;
         const candidates = list.filter(function (m) {
-          if (!m || m.side !== 'out') return false;
-          const t = typeof m.time === 'number' ? m.time : new Date(m.time).getTime();
+          if (!m || m.isInjected) return false;
+          const isOut = m.side === 'out' || m.role === 'user' || m.isUser === true;
+          if (!isOut) return false;
+          const t = typeof m.time === 'number' ? m.time : new Date(m.time || 0).getTime();
           if (!t || now - t > windowMs) return false;
           const text = String(m.text || m.content || '');
           return text.length >= 5 && text.length <= 35;
@@ -1492,6 +1764,8 @@
         if (pendingFull()) return;
         const cats = window.__MY_AUDIT__.data.categories.filter(function (c) { return !c.disabled; });
         if (!cats.length) return;
+        // 防止重复
+        if (window.__MY_AUDIT__.data.pending.some(function (p) { return p.action === 'add' && p.targetText === text; })) return;
         window.__MY_AUDIT__.data.pending.push({
           id: genId(),
           action: 'add',
@@ -1510,7 +1784,6 @@
         console.warn('[Audit] 自动抓取失败', e);
       }
     }
-    // 2% 低概率整理行为：删除 / 禁用 / 迁移
     function chaosApply() {
       try {
         const de = window.__MY_AUDIT__.data.settings.dreamEngine;
@@ -1555,7 +1828,6 @@
         console.warn('[Audit] 梦角申请生成失败', e);
       }
     }
-    // 主动发消息
     function autoSendMessage() {
       try {
         const de = window.__MY_AUDIT__.data.settings.dreamEngine;
@@ -1635,9 +1907,17 @@
         createFloatingBall();
         initObserver();
         startDreamEngine();
+        // 恢复 F5 前注入到聊天记录里的消息（问题6）
+        setTimeout(restoreInjectedFromStorage, 1500);
         setInterval(checkAndRepairChat, 30000);
         window.addEventListener('my-audit-data-updated', function () {
           updateBadge();
+        });
+        // 聊天记录变化时，同步恢复（防原页面清空）
+        window.addEventListener('storage', function (e) {
+          if (e.key === STORAGE_CHAT_KEY) {
+            setTimeout(restoreInjectedFromStorage, 300);
+          }
         });
       } catch (e) {
         console.warn('[Audit] 模块一初始化失败', e);
@@ -1658,9 +1938,8 @@
     const PANE_ID = 'cc-sect-audit';
     const TAB_SELECTOR = '[data-ccsel="audit"]';
     const hosts = [];
-    const hiddenSnapshot = new Map();
 
-    /* ---------------- Tab 容器与切换 ---------------- */
+    /* ---------------- Tab 容器与切换（修复问题7） ---------------- */
     function findTabParent() {
       const ref = document.querySelector('[id^="cc-sect-"]');
       if (ref && ref.parentNode) return ref.parentNode;
@@ -1692,11 +1971,12 @@
     function markTabActive(active) {
       try {
         document.querySelectorAll('[data-ccsel]').forEach(function (el) {
-          if (active && el.matches(TAB_SELECTOR)) el.classList.add('cc-tab-active');
-          if (!active && el.matches(TAB_SELECTOR)) el.classList.remove('cc-tab-active');
-          if (active && !el.matches(TAB_SELECTOR)) el.classList.remove('cc-tab-active');
+          if (el.matches(TAB_SELECTOR)) {
+            el.classList.toggle('cc-tab-active', !!active);
+          } else if (active) {
+            el.classList.remove('cc-tab-active');
+          }
         });
-        // 给Tab加上数字角标（修复问题3）
         const tab = document.querySelector(TAB_SELECTOR);
         if (tab) {
           let badge = tab.querySelector('.cc-tab-badge');
@@ -1715,7 +1995,6 @@
         if (!pane) return;
         document.querySelectorAll('[id^="cc-sect-"]').forEach(function (el) {
           if (el === pane) return;
-          if (!hiddenSnapshot.has(el)) hiddenSnapshot.set(el, el.hidden);
           el.hidden = true;
         });
         pane.hidden = false;
@@ -1729,15 +2008,6 @@
       try {
         const pane = document.getElementById(PANE_ID);
         if (pane) pane.hidden = true;
-        document.querySelectorAll('[id^="cc-sect-"]').forEach(function (el) {
-          if (el === pane) return;
-          if (hiddenSnapshot.has(el)) {
-            el.hidden = hiddenSnapshot.get(el);
-            hiddenSnapshot.delete(el);
-          } else {
-            el.hidden = false;
-          }
-        });
         markTabActive(false);
       } catch (e) {
         console.warn('[Audit] Tab 交还失败', e);
@@ -1792,7 +2062,7 @@
       if (!cats.length) {
         html += '<div class="cc-audit-empty">暂无分类，先新建一个分类</div>';
       }
-      cats.forEach(function (cat, ci) {
+      cats.forEach(function (cat) {
         const cards = cat.cards || [];
         html += '<div class="cc-group" data-cat-id="' + cat.id + '">';
         html += '<div class="cc-group-head">';
@@ -1884,7 +2154,6 @@
     function bindHostEvents(host) {
       try {
         const q = function (sel) { return host.querySelector(sel); };
-        // 批量添加：直接入分类
         const addBtn = q('.cc-add-btn');
         if (addBtn) addBtn.onclick = function () {
           try {
@@ -1911,7 +2180,6 @@
             console.warn('[Audit] 批量添加失败', e);
           }
         };
-        // 提交审核：进 pending，发件人=我
         const submitBtn = q('.cc-submit-btn');
         if (submitBtn) submitBtn.onclick = function () {
           try {
@@ -1944,13 +2212,11 @@
             console.warn('[Audit] 提交审核失败', e);
           }
         };
-        // 全选
         const allCheck = q('.cc-select-all');
         if (allCheck) allCheck.onchange = function () {
           host.querySelectorAll('.cc-card-check').forEach(function (cb) { cb.checked = allCheck.checked; });
           host.querySelectorAll('.cc-cat-check').forEach(function (cb) { cb.checked = allCheck.checked; });
         };
-        // 批量删除
         const batchDel = q('.cc-batch-del');
         if (batchDel) batchDel.onclick = function () {
           try {
@@ -1968,7 +2234,6 @@
             console.warn('[Audit] 批量删除失败', e);
           }
         };
-        // 批量转移
         const moveBtn = q('.cc-move-btn');
         if (moveBtn) moveBtn.onclick = function () {
           try {
@@ -1994,7 +2259,6 @@
             console.warn('[Audit] 批量转移失败', e);
           }
         };
-        // 一键去重
         const dedupe = q('.cc-dedupe-btn');
         if (dedupe) dedupe.onclick = function () {
           try {
@@ -2015,7 +2279,6 @@
             console.warn('[Audit] 去重失败', e);
           }
         };
-        // 新建分类
         const newCatBtn = q('.cc-newcat-btn');
         if (newCatBtn) newCatBtn.onclick = function () {
           try {
@@ -2036,7 +2299,6 @@
             console.warn('[Audit] 新建分类失败', e);
           }
         };
-        // 事件委托：折叠、分类操作、卡片操作、分类全选
         host.onclick = function (e) {
           try {
             const catCheck = e.target.classList && e.target.classList.contains('cc-cat-check') ? e.target : null;
@@ -2168,7 +2430,7 @@
       }
     }
 
-    /* ---------------- 字卡合并对接（修复问题4：适配原项目 mergeFiltered） ---------------- */
+    /* ---------------- 字卡合并对接（保留原有） ---------------- */
     function getMyAuditCardsRaw() {
       try {
         const out = [];
@@ -2222,20 +2484,15 @@
         return Array.isArray(original) ? original : [];
       }
     }
-
-    // 覆盖原项目 replyPoolGroups / replyPoolGroupsFor
     function overrideReplyPools() {
       try {
-        // 保存原函数
         const originalReplyPoolGroups = window.replyPoolGroups;
         const originalReplyPoolGroupsFor = window.replyPoolGroupsFor;
 
-        // 覆盖 replyPoolGroups
         if (typeof originalReplyPoolGroups === 'function') {
           window.replyPoolGroups = function () {
             try {
               const originalResult = originalReplyPoolGroups.apply(this, arguments);
-              // 合并我们的字卡，过滤禁用
               return mergeMyAuditGroups(originalResult);
             } catch (e) {
               console.warn('[Audit] replyPoolGroups 合并失败', e);
@@ -2244,7 +2501,6 @@
           };
         }
 
-        // 覆盖 replyPoolGroupsFor
         if (typeof originalReplyPoolGroupsFor === 'function') {
           window.replyPoolGroupsFor = function (cid) {
             try {
@@ -2272,7 +2528,6 @@
           overrideReplyPools();
           refresh();
         });
-        // 页面重建后补齐 pane 与字卡库
         let initTimer = null;
         const ob = new MutationObserver(function () {
           if (initTimer) return;
@@ -2284,7 +2539,6 @@
           }, 500);
         });
         ob.observe(document.body, { childList: true, subtree: true });
-        // 首次轮询补挂（应对延迟渲染的站点）
         let tries = 0;
         const timer = setInterval(function () {
           tries++;
@@ -2297,7 +2551,6 @@
         console.warn('[Audit] 模块二初始化失败', e);
       }
     }
-    // 对外暴露
     window.getMyAuditCardsRaw = getMyAuditCardsRaw;
     window.myAuditCardsToGroups = myAuditCardsToGroups;
     window.mergeMyAuditGroups = mergeMyAuditGroups;
