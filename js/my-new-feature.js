@@ -1,31 +1,26 @@
 // ==UserScript==
 // @name         Mochi梦角字卡·双人审核完整版
 // @namespace    https://github.com/yourname/yourrepo
-// @version      3.0.0
-// @description  九宫格审核图标、悬浮球、梦角引擎、双人审批、审核报告字卡Tab（新增/删除/禁用/迁移/恢复）
+// @version      3.1.0
+// @description  九宫格审核图标、悬浮球、梦角引擎、双人审批、审核报告字卡Tab（修复角标/发送/移动端/样式对齐）
 // @author       You
 // @match        *://*/*
 // @grant        none
 // @run-at       document-end
 // ==/UserScript==
-
 (function () {
   'use strict';
-
   /* ============================================================
      0. 全局基础层：常量 / 存储 / 工具 / 全局样式
      ============================================================ */
-
   const STORAGE_CHAT_KEY = 'xy-home-v2:default:chat-msgs';
   const STORAGE_AUDIT_KEY = 'my-audit-cards';
-
   // 审核图标 .app-ico 内的默认 svg
   const DEFAULT_ICON_SVG =
     '<svg viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
     '<path d="M12 20h9"></path>' +
     '<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>' +
     '</svg>';
-
   // 原生九宫格图标完整 DOM（严格还原，不改原生 class）
   const AUDIT_ICON_TEMPLATE =
     '<div class="app" data-app="audit" data-desk-widget="app-audit">' +
@@ -34,23 +29,17 @@
     '</div>';
 
   function deepClone(obj) {
-    try {
-      return JSON.parse(JSON.stringify(obj));
-    } catch (e) {
-      return obj;
-    }
+    try { return JSON.parse(JSON.stringify(obj)); }
+    catch (e) { return obj; }
   }
-
   function genId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
-
   function formatTime(date) {
     const d = date instanceof Date ? date : new Date(date || Date.now());
     const pad = n => String(n).padStart(2, '0');
     return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
   }
-
   function defaultData() {
     return {
       categories: [
@@ -80,7 +69,6 @@
       }
     };
   }
-
   // 兼容旧版 groups + 扁平 cards 结构，自动迁移到 categories 嵌套结构
   function migrateLegacy(raw) {
     try {
@@ -88,7 +76,6 @@
       const hasLegacy = Array.isArray(raw.groups) && Array.isArray(raw.cards);
       const hasNew = Array.isArray(raw.categories) && raw.categories.length > 0;
       if (!hasLegacy || hasNew) return raw;
-
       const categories = raw.groups.map((g, i) => ({
         id: g.id || ('cat-' + i),
         name: g.name || ('分类' + (i + 1)),
@@ -124,7 +111,6 @@
       return null;
     }
   }
-
   // 统一 pending 申请项字段
   function normalizePending(p) {
     const actionMap = { add: 'add', delete: 'delete', disable: 'disable', move: 'move', migrate: 'move', restore: 'restore' };
@@ -143,15 +129,13 @@
       disabledType: p.disabledType || 'single'
     };
   }
-
   function loadData() {
     try {
       const raw = localStorage.getItem(STORAGE_AUDIT_KEY);
       if (!raw) return defaultData();
       let parsed = null;
-      try {
-        parsed = JSON.parse(raw);
-      } catch (e) {
+      try { parsed = JSON.parse(raw); }
+      catch (e) {
         console.warn('[Audit] 审核数据损坏，安全重置', e);
         return defaultData();
       }
@@ -167,7 +151,6 @@
           dreamEngine: Object.assign({}, base.settings.dreamEngine, (parsed.settings || {}).dreamEngine || {})
         }
       };
-      // 每个分类补齐字段，卡片补齐字段
       merged.categories.forEach((c, i) => {
         c.id = c.id || genId();
         c.name = c.name || ('分类' + (i + 1));
@@ -188,7 +171,6 @@
       return defaultData();
     }
   }
-
   function saveData(data) {
     try {
       localStorage.setItem(STORAGE_AUDIT_KEY, JSON.stringify(data));
@@ -198,7 +180,6 @@
       return false;
     }
   }
-
   function injectCSS(css, id) {
     try {
       const styleId = id || 'my-audit-global-css';
@@ -211,7 +192,6 @@
       console.warn('[Audit] CSS注入失败', e);
     }
   }
-
   // 轻提示，替代 alert 的阻塞提示
   function toast(msg, color) {
     try {
@@ -231,23 +211,17 @@
       box._timer = setTimeout(() => { box.style.opacity = '0'; }, 2200);
     } catch (e) {}
   }
-
   // 全局状态
   const state = loadData();
-
   window.__MY_AUDIT__ = {
     data: state,
     save: function () {
       saveData(window.__MY_AUDIT__.data);
-      try {
-        window.dispatchEvent(new CustomEvent('my-audit-data-updated'));
-      } catch (e) {}
+      try { window.dispatchEvent(new CustomEvent('my-audit-data-updated')); } catch (e) {}
     },
     reload: function () {
       window.__MY_AUDIT__.data = loadData();
-      try {
-        window.dispatchEvent(new CustomEvent('my-audit-data-updated'));
-      } catch (e) {}
+      try { window.dispatchEvent(new CustomEvent('my-audit-data-updated')); } catch (e) {}
     },
     STORAGE: { chat: STORAGE_CHAT_KEY, audit: STORAGE_AUDIT_KEY }
   };
@@ -255,7 +229,10 @@
   injectCSS(`
     /* ---------- 审核图标与角标 ---------- */
     .app[data-app="audit"] { position: relative; }
-    .app[data-app="audit"] .app-ico img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; display: block; }
+    .app[data-app="audit"] .app-ico img {
+      width: 100%; height: 100%; object-fit: cover;
+      border-radius: 6px; display: block;
+    }
     .audit-badge {
       position: absolute; top: 4px; right: 4px;
       min-width: 18px; height: 18px; line-height: 16px;
@@ -265,7 +242,6 @@
       box-sizing: border-box; pointer-events: none; z-index: 3;
     }
     .audit-badge[data-count="0"] { display: none !important; }
-
     /* 装修编辑模式：黑框 + 抖动，对齐原生 */
     .edit-mode .app[data-app="audit"],
     .desk-edit .app[data-app="audit"],
@@ -279,11 +255,11 @@
       75% { transform: translateX(2px); }
     }
 
-    /* ---------- 悬浮球 ---------- */
+    /* ---------- 悬浮球 + 角标（修复问题1） ---------- */
     #audit-floating-ball {
       position: fixed; left: 0; top: 0;
       border-radius: 50%; overflow: hidden;
-      cursor: grab; user-select: none; touch-action: none;
+      cursor: pointer; user-select: none; touch-action: none;
       box-shadow: none;
       will-change: transform;
       transform: translate3d(0,0,0);
@@ -293,6 +269,12 @@
     }
     #audit-floating-ball:active { cursor: grabbing; }
     #audit-floating-ball img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    #audit-floating-ball .audit-badge {
+      top: -2px; right: -2px;
+      min-width: 16px; height: 16px; line-height: 14px;
+      font-size: 10px; padding: 0 3px;
+      background: #ef4444; color: #fff; border-color: #fff;
+    }
 
     /* ---------- 审核面板 ---------- */
     #audit-panel-mask {
@@ -315,8 +297,17 @@
     .audit-tab {
       padding: 11px 0; cursor: pointer; color: #6b7280; font-size: 14px;
       border: none; background: none; border-bottom: 2px solid transparent;
+      position: relative;
     }
     .audit-tab.active { color: #111827; border-bottom-color: #3b82f6; font-weight: 600; }
+    .audit-tab-badge {
+      display: inline-block;
+      min-width: 18px; height: 18px; line-height: 18px;
+      padding: 0 5px; margin-left: 4px;
+      background: #ef4444; color: #fff;
+      border-radius: 9px; font-size: 11px; font-weight: normal;
+      text-align: center; vertical-align: middle;
+    }
     .audit-tab-content { flex: 1; overflow-y: auto; padding: 14px 18px; }
     .audit-tab-pane { display: none; }
     .audit-tab-pane.active { display: block; }
@@ -375,16 +366,25 @@
     .result-approve { color: #166534; }
     .result-reject { color: #991b1b; }
 
-    /* ---------- 设置 ---------- */
+    /* ---------- 设置（修复问题6：控件右对齐） ---------- */
     .settings-section { margin-bottom: 18px; }
     .settings-section h4 { margin: 0 0 10px; font-size: 13px; color: #374151; }
     .settings-row {
       display: flex; align-items: center; justify-content: space-between;
-      gap: 10px; margin-bottom: 9px; font-size: 12px;
+      gap: 12px; margin-bottom: 9px; font-size: 12px;
     }
-    .settings-row > span { min-width: 96px; color: #6b7280; }
-    .settings-row .audit-input[type="range"] { flex: 1; }
-    .settings-row input[type="color"] { width: 34px; height: 24px; border: 1px solid #d1d5db; border-radius: 4px; padding: 0; cursor: pointer; }
+    .settings-row > .settings-label {
+      min-width: 96px; color: #6b7280; flex-shrink: 0;
+    }
+    .settings-row > .settings-controls {
+      display: flex; align-items: center; gap: 8px;
+      justify-content: flex-end; flex: 1;
+    }
+    .settings-row .audit-input[type="range"] { flex: 1; max-width: 260px; }
+    .settings-row input[type="color"] {
+      width: 34px; height: 24px; border: 1px solid #d1d5db;
+      border-radius: 4px; padding: 0; cursor: pointer;
+    }
     .icon-preview {
       width: 44px; height: 44px; border-radius: 8px; border: 1px solid #e5e7eb;
       overflow: hidden; display: flex; align-items: center; justify-content: center;
@@ -395,7 +395,7 @@
     .icon-preview.circle { border-radius: 50%; }
 
     /* ---------- 注入气泡 ---------- */
-    [data-ma-injected="1"] { pointer-events: none; }
+    [data-ma-injected="1"] { pointer-events: auto; }
 
     /* ---------- 模块二：页面内字卡库 Tab ---------- */
     #cc-sect-audit {
@@ -403,11 +403,26 @@
       box-sizing: border-box; padding: 2px 0 12px;
     }
     #cc-sect-audit[hidden] { display: none !important; }
+    /* 修复问题3：Tab激活黑底白字 + 角标 */
+    [data-ccsel].cc-tab-active,
     .cc-tab-active {
       background: #000 !important;
       color: #fff !important;
       border-color: #000 !important;
     }
+    .cc-tab-badge {
+      display: inline-block;
+      min-width: 20px; height: 20px; line-height: 20px;
+      padding: 0 6px; margin-left: 4px;
+      background: #f3f4f6; color: #374151;
+      border-radius: 10px; font-size: 12px; font-weight: 500;
+      text-align: center; vertical-align: middle;
+    }
+    .cc-tab-active .cc-tab-badge {
+      background: rgba(255,255,255,.2);
+      color: #fff;
+    }
+
     .cc-audit-toolbar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
     .cc-audit-toolbar-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .cc-audit-textarea {
@@ -455,23 +470,19 @@
     let engineTimer = null;
     let engineLock = false;
     let observerTimer = null;
-
     const injectedRegistry = []; // 注入气泡登记表，最多 50 条
 
     /* ---------------- 图标 ---------------- */
-
     function getDeskContainer() {
       return document.querySelector(
         '.desk-widgets, .app-grid, .nine-grid, .widget-container, [data-desk-area="widgets"]'
       );
     }
-
     function buildIconNode() {
       const wrap = document.createElement('div');
       wrap.innerHTML = AUDIT_ICON_TEMPLATE.trim();
       return wrap.firstElementChild;
     }
-
     function applyCustomIcon(iconEl) {
       try {
         const icoEl = iconEl.querySelector('.app-ico');
@@ -486,11 +497,11 @@
         console.warn('[Audit] 自定义图标应用失败', e);
       }
     }
-
     function updateBadge() {
       try {
-        const icons = document.querySelectorAll('.app[data-app="audit"]');
         const count = window.__MY_AUDIT__.data.pending.length;
+        // 九宫格图标角标
+        const icons = document.querySelectorAll('.app[data-app="audit"]');
         icons.forEach(icon => {
           let badge = icon.querySelector('.audit-badge');
           if (!badge) {
@@ -500,13 +511,23 @@
           }
           badge.dataset.count = String(count);
           badge.textContent = count > 99 ? '99+' : String(count);
-          badge.style.display = count > 0 ? 'block' : 'none';
         });
+        // 悬浮球角标（修复问题1）
+        const ball = document.getElementById('audit-floating-ball');
+        if (ball) {
+          let badge = ball.querySelector('.audit-badge');
+          if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'audit-badge';
+            ball.appendChild(badge);
+          }
+          badge.dataset.count = String(count);
+          badge.textContent = count > 99 ? '99+' : String(count);
+        }
       } catch (e) {
         console.warn('[Audit] 角标更新失败', e);
       }
     }
-
     function ensureAuditIcon() {
       try {
         const container = getDeskContainer();
@@ -527,8 +548,7 @@
       }
     }
 
-    /* ---------------- 悬浮球 ---------------- */
-
+    /* ---------------- 悬浮球（修复问题7移动端点击） ---------------- */
     function getBallPos() {
       const s = window.__MY_AUDIT__.data.settings.floatingBall;
       const size = s.size || 56;
@@ -542,7 +562,6 @@
       y = Math.min(Math.max(0, y), Math.max(0, window.innerHeight - size));
       return { x: x, y: y };
     }
-
     function paintBall(ball) {
       try {
         const s = window.__MY_AUDIT__.data.settings.floatingBall;
@@ -558,11 +577,11 @@
         }
         const forceShow = new URLSearchParams(window.location.search).get('show_audit') === 'true';
         ball.style.display = (s.enabled || forceShow) ? 'flex' : 'none';
+        updateBadge();
       } catch (e) {
         console.warn('[Audit] 悬浮球样式应用失败', e);
       }
     }
-
     function createFloatingBall() {
       try {
         let ball = document.getElementById('audit-floating-ball');
@@ -586,44 +605,44 @@
               bx = pos.x;
               by = pos.y;
               ball.style.transition = 'none';
-              e.preventDefault();
             } catch (err) {}
           };
-
           const onMove = function (e) {
             if (!dragging) return;
             try {
               const p = e.touches ? e.touches[0] : e;
               const dx = p.clientX - sx;
               const dy = p.clientY - sy;
-              if (Math.abs(dx) > 5 || Math.abs(dy) > 5) moved = true;
+              if (Math.abs(dx) > 10 || Math.abs(dy) > 10) moved = true;
               const size = window.__MY_AUDIT__.data.settings.floatingBall.size || 56;
               const nx = Math.min(Math.max(0, bx + dx), Math.max(0, window.innerWidth - size));
               const ny = Math.min(Math.max(0, by + dy), Math.max(0, window.innerHeight - size));
               ball.style.transform = 'translate3d(' + nx + 'px,' + ny + 'px,0)';
               window.__MY_AUDIT__.data.settings.floatingBall.position = { x: nx, y: ny };
-              if (e.cancelable) e.preventDefault();
+              if (moved && e.cancelable) e.preventDefault();
             } catch (err) {}
           };
-
           const onUp = function () {
             if (!dragging) return;
             dragging = false;
             ball.style.transition = 'transform .08s ease';
-            try {
-              window.__MY_AUDIT__.save();
-            } catch (e) {}
+            try { window.__MY_AUDIT__.save(); } catch (e) {}
           };
 
           ball.addEventListener('mousedown', onDown);
-          ball.addEventListener('touchstart', onDown, { passive: false });
+          ball.addEventListener('touchstart', onDown, { passive: true });
           document.addEventListener('mousemove', onMove);
           document.addEventListener('touchmove', onMove, { passive: false });
           document.addEventListener('mouseup', onUp);
           document.addEventListener('touchend', onUp);
 
-          ball.addEventListener('click', function () {
-            if (moved) return;
+          // 点击事件：只有没拖拽才触发
+          ball.addEventListener('click', function (e) {
+            if (moved) {
+              e.stopPropagation();
+              e.preventDefault();
+              return;
+            }
             if (typeof window.openAuditPanel === 'function') window.openAuditPanel('pending');
           });
         }
@@ -634,7 +653,6 @@
     }
 
     /* ---------------- 面板 ---------------- */
-
     function openAuditPanel(defaultTab) {
       try {
         if (!panelMask) {
@@ -647,7 +665,7 @@
                 '<button class="audit-panel-close">×</button>' +
               '</div>' +
               '<div class="audit-tabs">' +
-                '<button class="audit-tab" data-tab="pending">待审核</button>' +
+                '<button class="audit-tab" data-tab="pending">待审核 <span class="audit-tab-badge">0</span></button>' +
                 '<button class="audit-tab" data-tab="cardlib">字卡库</button>' +
                 '<button class="audit-tab" data-tab="history">历史档案</button>' +
                 '<button class="audit-tab" data-tab="settings">设置</button>' +
@@ -660,7 +678,6 @@
               '</div>' +
             '</div>';
           document.body.appendChild(panelMask);
-
           panelMask.querySelector('.audit-panel-close').onclick = function () {
             panelMask.style.display = 'none';
           };
@@ -681,7 +698,6 @@
             };
           });
         }
-
         panelMask.style.display = 'flex';
         const target = defaultTab || 'pending';
         panelMask.querySelectorAll('.audit-tab').forEach(function (t) {
@@ -698,25 +714,19 @@
         console.warn('[Audit] 面板打开失败', e);
       }
     }
-
     function closeAuditPanel() {
-      try {
-        if (panelMask) panelMask.style.display = 'none';
-      } catch (e) {}
+      try { if (panelMask) panelMask.style.display = 'none'; } catch (e) {}
     }
 
     const ACTION_LABEL = { add: '新增', delete: '删除', disable: '禁用', move: '迁移', restore: '恢复启用' };
-
     function findCard(pending) {
       const catList = window.__MY_AUDIT__.data.categories;
-      // 优先按 cardId 定位
       for (const cat of catList) {
         if (pending.cardId) {
           const hit = cat.cards.find(function (c) { return c.id === pending.cardId; });
           if (hit) return { cat: cat, card: hit };
         }
       }
-      // 退化为按文本定位：先源分类，再全局
       const src = catList.find(function (c) { return c.id === pending.sourceCatId; });
       if (src) {
         const hit = src.cards.find(function (c) { return c.text === pending.targetText; });
@@ -728,17 +738,19 @@
       }
       return null;
     }
-
     function renderPending() {
       try {
         const pane = panelMask.querySelector('[data-pane="pending"]');
         const list = window.__MY_AUDIT__.data.pending;
+        // 更新Tab角标（修复问题2）
+        const tabBadge = panelMask.querySelector('.audit-tab[data-tab="pending"] .audit-tab-badge');
+        if (tabBadge) tabBadge.textContent = list.length > 99 ? '99+' : String(list.length);
+
         if (!list.length) {
           pane.innerHTML = '<div style="text-align:center;color:#9ca3af;padding:40px 0;">暂无待审核申请</div>';
           return;
         }
         const cats = window.__MY_AUDIT__.data.categories;
-
         let html = '';
         html += '<div class="audit-batch-bar">' +
           '<label><input type="checkbox" id="pending-select-all"> 全选</label>' +
@@ -747,7 +759,6 @@
           '<button class="audit-btn audit-btn-sm" id="pending-all-approve">全部同意</button>' +
           '<button class="audit-btn audit-btn-sm" id="pending-all-reject">全部拒绝</button>' +
           '</div>';
-
         list.forEach(function (item, idx) {
           const label = ACTION_LABEL[item.action] || item.action;
           let desc = '';
@@ -776,7 +787,6 @@
           } else if (item.action === 'restore') {
             desc = '[' + item.sender + '] 申请恢复启用字卡：「' + item.targetText + '」';
           }
-
           html += '<div class="audit-pending-item">' +
             '<input type="checkbox" class="pending-check audit-pending-checkbox" data-idx="' + idx + '" style="margin-top:3px;">' +
             '<div class="audit-pending-info">' +
@@ -791,14 +801,12 @@
             '</div>' +
           '</div>';
         });
-
         pane.innerHTML = html;
         bindPendingEvents(pane);
       } catch (e) {
         console.warn('[Audit] 待审核渲染失败', e);
       }
     }
-
     function bindPendingEvents(pane) {
       try {
         const all = pane.querySelector('#pending-select-all');
@@ -819,11 +827,10 @@
         if (ar) ar.onclick = function () {
           batchReject(window.__MY_AUDIT__.data.pending.map(function (_, i) { return i; }));
         };
-
         pane.querySelectorAll('.pending-approve').forEach(function (btn) {
           btn.onclick = function () {
             const idx = Number(btn.dataset.idx);
-            if (approveOne(idx)) {
+            if (approveOne(idx, pane)) {
               renderPending();
               updateBadge();
             }
@@ -840,12 +847,9 @@
         console.warn('[Audit] 待审核事件绑定失败', e);
       }
     }
-
     function getCheckedIdx(pane) {
       return Array.from(pane.querySelectorAll('.pending-check:checked')).map(function (cb) { return Number(cb.dataset.idx); });
     }
-
-    // 读取 UI 上的分类选择，写回 pending 项
     function syncPendingSelect(pane, idx) {
       try {
         const item = window.__MY_AUDIT__.data.pending[idx];
@@ -864,29 +868,18 @@
         }
       } catch (e) {}
     }
-
     function approveOne(idx, pane) {
       try {
         const data = window.__MY_AUDIT__.data;
         const item = data.pending[idx];
         if (!item) return false;
         if (pane) syncPendingSelect(pane, idx);
-
         if (item.action === 'add') {
           const cat = data.categories.find(function (c) { return c.id === item.targetCategory; });
-          if (!cat) {
-            toast('目标分类不存在', '#b91c1c');
-            return false;
-          }
-          if (!item.targetText) {
-            toast('字卡内容为空', '#b91c1c');
-            return false;
-          }
+          if (!cat) { toast('目标分类不存在', '#b91c1c'); return false; }
+          if (!item.targetText) { toast('字卡内容为空', '#b91c1c'); return false; }
           const dup = cat.cards.some(function (c) { return c.text === item.targetText; });
-          if (dup) {
-            toast('该分类已存在相同字卡', '#b45309');
-            return false;
-          }
+          if (dup) { toast('该分类已存在相同字卡', '#b45309'); return false; }
           cat.cards.push({
             id: genId(),
             text: item.targetText,
@@ -896,50 +889,33 @@
           });
         } else if (item.action === 'delete') {
           const hit = findCard(item);
-          if (!hit) {
-            toast('未找到对应字卡，可能已被删除', '#b45309');
-            return false;
-          }
+          if (!hit) { toast('未找到对应字卡，可能已被删除', '#b45309'); return false; }
           hit.cat.cards = hit.cat.cards.filter(function (c) { return c.id !== hit.card.id; });
         } else if (item.action === 'disable') {
           const hit = findCard(item);
-          if (!hit) {
-            toast('未找到对应字卡', '#b45309');
-            return false;
-          }
+          if (!hit) { toast('未找到对应字卡', '#b45309'); return false; }
           hit.card.disabled = true;
           hit.card.disabledType = item.disabledType === 'both' ? 'both' : 'single';
         } else if (item.action === 'restore') {
           const hit = findCard(item);
-          if (!hit) {
-            toast('未找到对应字卡', '#b45309');
-            return false;
-          }
+          if (!hit) { toast('未找到对应字卡', '#b45309'); return false; }
           hit.card.disabled = false;
         } else if (item.action === 'move') {
           if (item.sourceCatId === item.targetCategory) {
-            toast('源分类与目标分类不能相同', '#b91c1c');
-            return false;
+            toast('源分类与目标分类不能相同', '#b91c1c'); return false;
           }
           const src = data.categories.find(function (c) { return c.id === item.sourceCatId; });
           const dst = data.categories.find(function (c) { return c.id === item.targetCategory; });
-          if (!src || !dst) {
-            toast('源分类或目标分类不存在', '#b91c1c');
-            return false;
-          }
+          if (!src || !dst) { toast('源分类或目标分类不存在', '#b91c1c'); return false; }
           const cardIdx = src.cards.findIndex(function (c) { return c.id === item.cardId && item.cardId; });
           let realIdx = cardIdx;
           if (realIdx < 0) realIdx = src.cards.findIndex(function (c) { return c.text === item.targetText; });
-          if (realIdx < 0) {
-            toast('源分类中未找到该字卡', '#b45309');
-            return false;
-          }
+          if (realIdx < 0) { toast('源分类中未找到该字卡', '#b45309'); return false; }
           const card = src.cards.splice(realIdx, 1)[0];
           dst.cards.push(card);
         } else {
           return false;
         }
-
         pushHistory(item, 'approve');
         data.pending.splice(idx, 1);
         window.__MY_AUDIT__.save();
@@ -950,7 +926,6 @@
         return false;
       }
     }
-
     function rejectOne(idx) {
       try {
         const data = window.__MY_AUDIT__.data;
@@ -963,11 +938,9 @@
         console.warn('[Audit] 审批驳回失败', e);
       }
     }
-
     function batchApprove(indices) {
       try {
         const pane = panelMask ? panelMask.querySelector('[data-pane="pending"]') : null;
-        // 从后往前删，避免下标漂移
         const sorted = indices.slice().sort(function (a, b) { return b - a; });
         sorted.forEach(function (i) {
           const it = window.__MY_AUDIT__.data.pending[i];
@@ -975,7 +948,7 @@
           if (it.action === 'add' || it.action === 'move') {
             if (pane) syncPendingSelect(pane, i);
           }
-          approveOne(i);
+          approveOne(i, pane);
         });
         window.__MY_AUDIT__.save();
         renderPending();
@@ -984,7 +957,6 @@
         console.warn('[Audit] 批量同意失败', e);
       }
     }
-
     function batchReject(indices) {
       try {
         const sorted = indices.slice().sort(function (a, b) { return b - a; });
@@ -995,7 +967,6 @@
         console.warn('[Audit] 批量拒绝失败', e);
       }
     }
-
     function pushHistory(item, result) {
       try {
         const list = window.__MY_AUDIT__.data.history;
@@ -1012,7 +983,6 @@
         while (list.length > 100) list.shift();
       } catch (e) {}
     }
-
     function renderHistory() {
       try {
         const pane = panelMask.querySelector('[data-pane="history"]');
@@ -1039,7 +1009,6 @@
         console.warn('[Audit] 历史渲染失败', e);
       }
     }
-
     function renderCardlibPane() {
       try {
         const pane = panelMask.querySelector('[data-pane="cardlib"]');
@@ -1050,26 +1019,24 @@
           ui.render(pane);
         } else {
           pane.innerHTML = '<div style="text-align:center;color:#9ca3af;padding:30px 0;">' +
-            '字卡库尚未就绪，请稍后重试，或点击页面第三个 Tab「审核报告字卡」查看。</div>';
+            '字卡库尚未就绪，请点击页面第三个 Tab「审核报告字卡」查看。</div>';
         }
       } catch (e) {
         console.warn('[Audit] 字卡库面板渲染失败', e);
       }
     }
-
     function renderSettings() {
       try {
         const pane = panelMask.querySelector('[data-pane="settings"]');
         const s = window.__MY_AUDIT__.data.settings;
         const fb = s.floatingBall;
         const de = s.dreamEngine;
-
         pane.innerHTML = '' +
           '<div class="settings-section">' +
             '<h4>九宫格图标</h4>' +
             '<div class="settings-row">' +
-              '<span>自定义图标</span>' +
-              '<div style="display:flex;gap:8px;align-items:center;">' +
+              '<span class="settings-label">自定义图标</span>' +
+              '<div class="settings-controls">' +
                 '<div class="icon-preview rect" id="icon-preview"></div>' +
                 '<input type="file" id="icon-upload" accept="image/*" hidden>' +
                 '<button class="audit-btn audit-btn-sm" id="icon-upload-btn">上传</button>' +
@@ -1079,20 +1046,29 @@
           '</div>' +
           '<div class="settings-section">' +
             '<h4>悬浮球</h4>' +
-            '<div class="settings-row"><span>启用悬浮球</span><input type="checkbox" id="ball-enabled"></div>' +
             '<div class="settings-row">' +
-              '<span>颜色</span>' +
-              '<input type="color" id="ball-color">' +
-              '<button class="audit-btn audit-btn-sm" id="ball-color-reset">恢复默认</button>' +
+              '<span class="settings-label">启用悬浮球</span>' +
+              '<div class="settings-controls">' +
+                '<input type="checkbox" id="ball-enabled">' +
+              '</div>' +
             '</div>' +
             '<div class="settings-row">' +
-              '<span>大小 <span id="ball-size-text">56px</span></span>' +
-              '<input type="range" id="ball-size" min="36" max="80" step="2">' +
-              '<button class="audit-btn audit-btn-sm" id="ball-size-reset">恢复默认</button>' +
+              '<span class="settings-label">颜色</span>' +
+              '<div class="settings-controls">' +
+                '<input type="color" id="ball-color">' +
+                '<button class="audit-btn audit-btn-sm" id="ball-color-reset">恢复默认</button>' +
+              '</div>' +
             '</div>' +
             '<div class="settings-row">' +
-              '<span>自定义头像</span>' +
-              '<div style="display:flex;gap:8px;align-items:center;">' +
+              '<span class="settings-label">大小 <span id="ball-size-text">56px</span></span>' +
+              '<div class="settings-controls">' +
+                '<input type="range" id="ball-size" min="36" max="80" step="2">' +
+                '<button class="audit-btn audit-btn-sm" id="ball-size-reset">恢复默认</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="settings-row">' +
+              '<span class="settings-label">自定义头像</span>' +
+              '<div class="settings-controls">' +
                 '<div class="icon-preview circle" id="ball-avatar-preview"></div>' +
                 '<input type="file" id="ball-avatar-upload" accept="image/*" hidden>' +
                 '<button class="audit-btn audit-btn-sm" id="ball-avatar-btn">上传</button>' +
@@ -1102,14 +1078,23 @@
           '</div>' +
           '<div class="settings-section">' +
             '<h4>梦角引擎</h4>' +
-            '<div class="settings-row"><span>启用自动引擎</span><input type="checkbox" id="engine-enabled"></div>' +
-            '<div class="settings-row"><span>说明</span><span style="color:#9ca3af;">每30分钟巡检；主动申请概率2%；待审上限5条</span></div>' +
+            '<div class="settings-row">' +
+              '<span class="settings-label">启用自动引擎</span>' +
+              '<div class="settings-controls">' +
+                '<input type="checkbox" id="engine-enabled">' +
+              '</div>' +
+            '</div>' +
+            '<div class="settings-row">' +
+              '<span class="settings-label">说明</span>' +
+              '<span style="color:#9ca3af;">每30分钟巡检；主动申请概率2%；待审上限5条</span>' +
+            '</div>' +
           '</div>' +
           '<div class="settings-section">' +
             '<h4>数据备份</h4>' +
             '<div class="settings-row">' +
-              '<button class="audit-btn audit-btn-sm" id="data-export">导出全部数据</button>' +
-              '<div style="display:flex;gap:8px;">' +
+              '<span class="settings-label">备份操作</span>' +
+              '<div class="settings-controls">' +
+                '<button class="audit-btn audit-btn-sm" id="data-export">导出全部数据</button>' +
                 '<input type="file" id="data-import" accept=".json" hidden>' +
                 '<button class="audit-btn audit-btn-sm" id="data-import-btn">导入数据</button>' +
               '</div>' +
@@ -1121,7 +1106,6 @@
         iconPrev.innerHTML = s.iconCustom
           ? '<img src="' + s.iconCustom + '" alt="">'
           : '<span style="transform:scale(.8);display:inline-block;">' + DEFAULT_ICON_SVG + '</span>';
-
         pane.querySelector('#icon-upload-btn').onclick = function () {
           pane.querySelector('#icon-upload').click();
         };
@@ -1141,7 +1125,6 @@
           ensureAuditIcon();
           toast('图标已恢复默认');
         };
-
         // 悬浮球
         const enabled = pane.querySelector('#ball-enabled');
         enabled.checked = !!fb.enabled;
@@ -1150,7 +1133,6 @@
           window.__MY_AUDIT__.save();
           createFloatingBall();
         };
-
         const color = pane.querySelector('#ball-color');
         color.value = fb.color;
         color.oninput = function () {
@@ -1166,7 +1148,6 @@
           const ball = document.getElementById('audit-floating-ball');
           if (ball) paintBall(ball);
         };
-
         const size = pane.querySelector('#ball-size');
         const sizeText = pane.querySelector('#ball-size-text');
         size.value = fb.size;
@@ -1186,7 +1167,6 @@
           const ball = document.getElementById('audit-floating-ball');
           if (ball) paintBall(ball);
         };
-
         const avatarPrev = pane.querySelector('#ball-avatar-preview');
         avatarPrev.innerHTML = fb.avatar ? '<img src="' + fb.avatar + '" alt="">' : '';
         pane.querySelector('#ball-avatar-btn').onclick = function () {
@@ -1209,7 +1189,6 @@
           const ball = document.getElementById('audit-floating-ball');
           if (ball) paintBall(ball);
         };
-
         // 引擎
         const engineEl = pane.querySelector('#engine-enabled');
         engineEl.checked = !!de.enabled;
@@ -1218,7 +1197,6 @@
           window.__MY_AUDIT__.save();
           de.enabled ? startDreamEngine() : stopDreamEngine();
         };
-
         // 备份
         pane.querySelector('#data-export').onclick = function () {
           try {
@@ -1269,7 +1247,6 @@
         console.warn('[Audit] 设置渲染失败', e);
       }
     }
-
     // Canvas 裁剪转 base64；circle=true 时圆形裁剪
     function processImage(file, width, height, callback, circle) {
       try {
@@ -1306,13 +1283,12 @@
       }
     }
 
-    /* ---------------- 消息发送 ---------------- */
-
+    /* ---------------- 消息发送（修复问题4：气泡注入） ---------------- */
     function getNativeBubbleStyle(side) {
       try {
         const selectors = side === 'in'
-          ? ['.bubble-in', '.msg-in', '.chat-bubble-left', '[data-side="in"] .bubble', '.message.received .bubble']
-          : ['.bubble-out', '.msg-out', '.chat-bubble-right', '[data-side="out"] .bubble', '.message.sent .bubble'];
+          ? ['.bubble-in', '.msg-in', '.chat-bubble-left', '[data-side="in"] .bubble', '.message.received .bubble', '.chat-item.receive .bubble']
+          : ['.bubble-out', '.msg-out', '.chat-bubble-right', '[data-side="out"] .bubble', '.message.sent .bubble', '.chat-item.send .bubble'];
         for (const sel of selectors) {
           const el = document.querySelector(sel);
           if (!el) continue;
@@ -1327,21 +1303,18 @@
           };
         }
         return null;
-      } catch (e) {
-        return null;
-      }
+      } catch (e) { return null; }
     }
-
     function getChatContainer() {
-      return document.querySelector('.chat-container, .msg-list, .chat-messages, .chat-list, [data-chat-container]');
+      return document.querySelector(
+        '.chat-container, .msg-list, .chat-messages, .chat-list, [data-chat-container], .message-list, .chat-box, .chat-scroll'
+      );
     }
-
     function buildInjectedNode(text, side, style) {
       const node = document.createElement('div');
       node.dataset.maInjected = '1';
       node.style.cssText = 'display:flex;align-items:flex-start;gap:8px;margin:10px 0;' +
         'flex-direction:' + (side === 'in' ? 'row' : 'row-reverse') + ';';
-
       const avatarWrap = document.createElement('div');
       avatarWrap.style.cssText = 'width:34px;height:34px;border-radius:50%;flex-shrink:0;overflow:hidden;' +
         'background:' + (side === 'in' ? '#e5e7eb' : '#3b82f6') + ';';
@@ -1349,43 +1322,36 @@
       if (avatarImg) {
         avatarWrap.innerHTML = '<img src="' + avatarImg + '" style="width:100%;height:100%;object-fit:cover;display:block;">';
       }
-
       const content = document.createElement('div');
       content.style.cssText = 'display:flex;flex-direction:column;max-width:72%;align-items:' +
         (side === 'in' ? 'flex-start' : 'flex-end') + ';';
-
       const timeEl = document.createElement('div');
       timeEl.style.cssText = 'font-size:11px;color:#9ca3af;margin:0 2px 3px;';
       timeEl.textContent = formatTime(new Date());
-
       const bubble = document.createElement('div');
       bubble.style.cssText = 'background:' + style.background + ';color:' + style.color + ';' +
         'border-radius:' + style.borderRadius + ';font-size:' + style.fontSize + ';padding:' + style.padding + ';' +
         'word-break:break-word;line-height:1.5;';
       bubble.textContent = text;
-
       content.appendChild(timeEl);
       content.appendChild(bubble);
       node.appendChild(avatarWrap);
       node.appendChild(content);
       return node;
     }
-
     function fallbackStyle(side) {
       return {
-        background: side === 'in' ? 'var(--audit-bubble-in-bg, #f3f4f6)' : 'var(--audit-bubble-out-bg, #3b82f6)',
-        color: side === 'in' ? 'var(--audit-bubble-in-color, #111827)' : 'var(--audit-bubble-out-color, #ffffff)',
+        background: side === 'in' ? '#f3f4f6' : '#3b82f6',
+        color: side === 'in' ? '#111827' : '#ffffff',
         borderRadius: '12px',
         fontSize: '14px',
         padding: '8px 12px'
       };
     }
-
     function injectBubbleToChat(text, side) {
       try {
         if (!text) return false;
         const s = side === 'in' || side === 'out' ? side : 'in';
-
         // 第一层：原生渲染 API（存在则优先）
         if (typeof window.__nativeRenderBubble === 'function') {
           try {
@@ -1396,7 +1362,6 @@
             return true;
           } catch (e) {}
         }
-
         // 第二层：手搓气泡
         const container = getChatContainer();
         if (!container) {
@@ -1406,10 +1371,8 @@
         const style = getNativeBubbleStyle(s) || fallbackStyle(s);
         container.appendChild(buildInjectedNode(text, s, style));
         try { container.scrollTop = container.scrollHeight; } catch (e) {}
-
         // 第三层：双写存储
         writeChatStorage(text, s);
-
         injectedRegistry.push({ text: text, side: s, time: Date.now() });
         trimRegistry();
         return true;
@@ -1418,20 +1381,17 @@
         return false;
       }
     }
-
     function trimRegistry() {
       while (injectedRegistry.length > 50) injectedRegistry.shift();
     }
-
     function writeChatStorage(text, side) {
       try {
         const raw = localStorage.getItem(STORAGE_CHAT_KEY);
         let list = [];
         if (raw) {
           let parsed;
-          try {
-            parsed = JSON.parse(raw);
-          } catch (e) {
+          try { parsed = JSON.parse(raw); }
+          catch (e) {
             console.warn('[Audit] 聊天记录损坏，放弃本次写入', e);
             return;
           }
@@ -1454,7 +1414,6 @@
         console.warn('[Audit] 聊天存储写入失败，放弃写入避免污染', e);
       }
     }
-
     function checkAndRepairChat() {
       try {
         const container = getChatContainer();
@@ -1464,7 +1423,6 @@
         }
         const nodes = container.querySelectorAll('[data-ma-injected="1"]');
         if (nodes.length >= injectedRegistry.length) {
-          // 样式热同步
           const styleIn = getNativeBubbleStyle('in');
           if (styleIn) {
             nodes.forEach(function (n) {
@@ -1478,7 +1436,6 @@
           }
           return;
         }
-        // 被重绘抹除，按登记表重建
         injectedRegistry.forEach(function (item) {
           const style = getNativeBubbleStyle(item.side) || fallbackStyle(item.side);
           container.appendChild(buildInjectedNode(item.text, item.side, style));
@@ -1488,11 +1445,9 @@
         console.warn('[Audit] 气泡巡检失败', e);
       }
     }
-
     window.sendAuditCard = injectBubbleToChat;
 
     /* ---------------- 梦角引擎 ---------------- */
-
     function getEnabledCards() {
       const out = [];
       try {
@@ -1505,24 +1460,17 @@
       } catch (e) {}
       return out;
     }
-
     function pendingFull() {
       return window.__MY_AUDIT__.data.pending.length >= window.__MY_AUDIT__.data.settings.dreamEngine.maxPending;
     }
-
     // 抓取用户发言 → 新增申请
     function autoGrabChat() {
       try {
         const raw = localStorage.getItem(STORAGE_CHAT_KEY);
         if (!raw) return;
         let list;
-        try {
-          list = JSON.parse(raw);
-        } catch (e) {
-          return;
-        }
+        try { list = JSON.parse(raw); } catch (e) { return; }
         if (!Array.isArray(list)) return;
-
         const now = Date.now();
         const windowMs = 15 * 60 * 1000;
         const candidates = list.filter(function (m) {
@@ -1533,21 +1481,17 @@
           return text.length >= 5 && text.length <= 35;
         });
         if (!candidates.length) return;
-
         const de = window.__MY_AUDIT__.data.settings.dreamEngine;
         const emotions = ['喜欢', '爱', '想你', '开心'];
         const pick = candidates[Math.floor(Math.random() * candidates.length)];
         const text = String(pick.text || pick.content || '').trim();
         if (!text) return;
-
         let prob = de.baseProbability;
         if (emotions.some(function (w) { return text.indexOf(w) >= 0; })) prob = de.emotionProbability;
         if (Math.random() > prob) return;
         if (pendingFull()) return;
-
         const cats = window.__MY_AUDIT__.data.categories.filter(function (c) { return !c.disabled; });
         if (!cats.length) return;
-
         window.__MY_AUDIT__.data.pending.push({
           id: genId(),
           action: 'add',
@@ -1566,7 +1510,6 @@
         console.warn('[Audit] 自动抓取失败', e);
       }
     }
-
     // 2% 低概率整理行为：删除 / 禁用 / 迁移
     function chaosApply() {
       try {
@@ -1574,21 +1517,16 @@
         if (!de.enabled) return;
         if (pendingFull()) return;
         if (Math.random() > (de.chaosProbability || 0.02)) return;
-
         const pool = getEnabledCards();
         if (!pool.length) return;
-
         const types = ['delete', 'disable', 'move'];
         const action = types[Math.floor(Math.random() * 3)];
         const pick = pool[Math.floor(Math.random() * pool.length)];
         if (!pick || !pick.card || !pick.cat) return;
-
-        // 同一张卡不重复堆积申请
         const dup = window.__MY_AUDIT__.data.pending.some(function (p) {
           return p.targetText === pick.card.text && p.action === action;
         });
         if (dup) return;
-
         const item = {
           id: genId(),
           action: action,
@@ -1601,7 +1539,6 @@
           targetCategory: null,
           targetCatName: null
         };
-
         if (action === 'move') {
           const others = window.__MY_AUDIT__.data.categories.filter(function (c) {
             return c.id !== pick.cat.id && !c.disabled;
@@ -1611,7 +1548,6 @@
           item.targetCategory = dst.id;
           item.targetCatName = dst.name;
         }
-
         window.__MY_AUDIT__.data.pending.push(item);
         window.__MY_AUDIT__.save();
         updateBadge();
@@ -1619,7 +1555,6 @@
         console.warn('[Audit] 梦角申请生成失败', e);
       }
     }
-
     // 主动发消息
     function autoSendMessage() {
       try {
@@ -1634,7 +1569,6 @@
         console.warn('[Audit] 主动发消息失败', e);
       }
     }
-
     function runEngineCycle() {
       if (engineLock) return;
       engineLock = true;
@@ -1650,7 +1584,6 @@
         engineLock = false;
       }
     }
-
     function startDreamEngine() {
       try {
         if (engineTimer) return;
@@ -1663,7 +1596,6 @@
         console.warn('[Audit] 梦角引擎启动失败', e);
       }
     }
-
     function stopDreamEngine() {
       try {
         if (engineTimer) {
@@ -1676,7 +1608,6 @@
     }
 
     /* ---------------- 自愈 ---------------- */
-
     function scheduleHeal() {
       if (observerTimer) return;
       observerTimer = setTimeout(function () {
@@ -1690,7 +1621,6 @@
         } catch (e) {}
       }, 400);
     }
-
     function initObserver() {
       try {
         const ob = new MutationObserver(function () { scheduleHeal(); });
@@ -1699,7 +1629,6 @@
         console.warn('[Audit] 自愈监听初始化失败', e);
       }
     }
-
     function init() {
       try {
         ensureAuditIcon();
@@ -1714,9 +1643,7 @@
         console.warn('[Audit] 模块一初始化失败', e);
       }
     }
-
     window.openAuditPanel = function (tab) { openAuditPanel(tab); };
-
     if (document.readyState === 'interactive' || document.readyState === 'complete') {
       setTimeout(init, 900);
     } else {
@@ -1734,7 +1661,6 @@
     const hiddenSnapshot = new Map();
 
     /* ---------------- Tab 容器与切换 ---------------- */
-
     function findTabParent() {
       const ref = document.querySelector('[id^="cc-sect-"]');
       if (ref && ref.parentNode) return ref.parentNode;
@@ -1746,14 +1672,12 @@
       }
       return null;
     }
-
     function ensurePane() {
       try {
         let pane = document.getElementById(PANE_ID);
         if (pane) return pane;
         const parent = findTabParent();
         if (!parent) return null;
-
         pane = document.createElement('div');
         pane.id = PANE_ID;
         pane.hidden = true;
@@ -1765,7 +1689,6 @@
         return null;
       }
     }
-
     function markTabActive(active) {
       try {
         document.querySelectorAll('[data-ccsel]').forEach(function (el) {
@@ -1773,9 +1696,19 @@
           if (!active && el.matches(TAB_SELECTOR)) el.classList.remove('cc-tab-active');
           if (active && !el.matches(TAB_SELECTOR)) el.classList.remove('cc-tab-active');
         });
+        // 给Tab加上数字角标（修复问题3）
+        const tab = document.querySelector(TAB_SELECTOR);
+        if (tab) {
+          let badge = tab.querySelector('.cc-tab-badge');
+          if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'cc-tab-badge';
+            tab.appendChild(badge);
+          }
+          badge.textContent = String(countAllCards());
+        }
       } catch (e) {}
     }
-
     function showPane() {
       try {
         const pane = ensurePane();
@@ -1792,7 +1725,6 @@
         console.warn('[Audit] Tab 切换失败', e);
       }
     }
-
     function hidePane() {
       try {
         const pane = document.getElementById(PANE_ID);
@@ -1811,14 +1743,12 @@
         console.warn('[Audit] Tab 交还失败', e);
       }
     }
-
     function bindTabSwitch() {
       try {
         document.addEventListener('click', function (e) {
           const tab = e.target.closest ? e.target.closest('[data-ccsel]') : null;
           if (!tab) return;
           if (tab.matches(TAB_SELECTOR)) {
-            // 阻止站点把我们的 pane 再次隐藏
             setTimeout(showPane, 0);
             showPane();
           } else {
@@ -1832,12 +1762,10 @@
     }
 
     /* ---------------- 字卡库 UI ---------------- */
-
     function buildHTML() {
       const data = window.__MY_AUDIT__.data;
       const cats = data.categories;
       let html = '';
-
       html += '<div class="cc-audit-toolbar">';
       html += '<textarea class="cc-audit-textarea cc-batch-input" placeholder="逐行输入字卡，每行一条，可批量添加或提交审核"></textarea>';
       html += '<div class="cc-audit-toolbar-row">';
@@ -1860,7 +1788,6 @@
       html += '<button class="audit-btn audit-btn-primary audit-btn-sm cc-newcat-btn">+ 新建分类</button>';
       html += '</div>';
       html += '</div>';
-
       html += '<div class="cc-audit-list">';
       if (!cats.length) {
         html += '<div class="cc-audit-empty">暂无分类，先新建一个分类</div>';
@@ -1882,7 +1809,6 @@
         html += '<button class="audit-btn audit-btn-danger audit-btn-sm cc-cat-op" data-op="delete" data-cat-id="' + cat.id + '">删除</button>';
         html += '</span>';
         html += '</div>';
-
         html += '<div class="cc-group-body"' + (cat.collapsed ? ' hidden' : '') + '>';
         if (!cards.length) {
           html += '<div class="cc-audit-empty">该分类暂无字卡</div>';
@@ -1911,10 +1837,8 @@
         html += '</div>';
       });
       html += '</div>';
-
       return html;
     }
-
     function escapeHTML(str) {
       return String(str == null ? '' : str)
         .replace(/&/g, '&amp;')
@@ -1922,21 +1846,16 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
     }
-
     function countAllCards() {
       try {
         return window.__MY_AUDIT__.data.categories.reduce(function (sum, c) {
           return sum + (c.cards ? c.cards.length : 0);
         }, 0);
-      } catch (e) {
-        return 0;
-      }
+      } catch (e) { return 0; }
     }
-
     function findCat(id) {
       return window.__MY_AUDIT__.data.categories.find(function (c) { return c.id === id; });
     }
-
     function renderCardLibrary(host) {
       try {
         if (!host) return;
@@ -1947,7 +1866,6 @@
         console.warn('[Audit] 字卡库渲染失败', e);
       }
     }
-
     function refresh() {
       try {
         hosts.forEach(function (h) {
@@ -1955,19 +1873,17 @@
         });
         const pane = document.getElementById(PANE_ID);
         if (pane && !pane.hidden && hosts.indexOf(pane) < 0) renderCardLibrary(pane);
+        markTabActive(document.querySelector(TAB_SELECTOR)?.classList.contains('cc-tab-active'));
       } catch (e) {}
     }
-
     function selectedIds(host) {
       return Array.from(host.querySelectorAll('.cc-card-check:checked')).map(function (cb) {
         return { cardId: cb.dataset.cardId, catId: cb.dataset.catId };
       });
     }
-
     function bindHostEvents(host) {
       try {
         const q = function (sel) { return host.querySelector(sel); };
-
         // 批量添加：直接入分类
         const addBtn = q('.cc-add-btn');
         if (addBtn) addBtn.onclick = function () {
@@ -1995,7 +1911,6 @@
             console.warn('[Audit] 批量添加失败', e);
           }
         };
-
         // 提交审核：进 pending，发件人=我
         const submitBtn = q('.cc-submit-btn');
         if (submitBtn) submitBtn.onclick = function () {
@@ -2029,14 +1944,12 @@
             console.warn('[Audit] 提交审核失败', e);
           }
         };
-
         // 全选
         const allCheck = q('.cc-select-all');
         if (allCheck) allCheck.onchange = function () {
           host.querySelectorAll('.cc-card-check').forEach(function (cb) { cb.checked = allCheck.checked; });
           host.querySelectorAll('.cc-cat-check').forEach(function (cb) { cb.checked = allCheck.checked; });
         };
-
         // 批量删除
         const batchDel = q('.cc-batch-del');
         if (batchDel) batchDel.onclick = function () {
@@ -2055,7 +1968,6 @@
             console.warn('[Audit] 批量删除失败', e);
           }
         };
-
         // 批量转移
         const moveBtn = q('.cc-move-btn');
         if (moveBtn) moveBtn.onclick = function () {
@@ -2082,7 +1994,6 @@
             console.warn('[Audit] 批量转移失败', e);
           }
         };
-
         // 一键去重
         const dedupe = q('.cc-dedupe-btn');
         if (dedupe) dedupe.onclick = function () {
@@ -2104,7 +2015,6 @@
             console.warn('[Audit] 去重失败', e);
           }
         };
-
         // 新建分类
         const newCatBtn = q('.cc-newcat-btn');
         if (newCatBtn) newCatBtn.onclick = function () {
@@ -2126,7 +2036,6 @@
             console.warn('[Audit] 新建分类失败', e);
           }
         };
-
         // 事件委托：折叠、分类操作、卡片操作、分类全选
         host.onclick = function (e) {
           try {
@@ -2144,7 +2053,6 @@
               fold.classList.toggle('open', !cat.collapsed);
               return;
             }
-
             const catOpBtn = e.target.closest('.cc-cat-op');
             if (catOpBtn) {
               const catId = catOpBtn.dataset.catId;
@@ -2153,7 +2061,6 @@
               const idx = cats.findIndex(function (c) { return c.id === catId; });
               if (idx < 0) return;
               const cat = cats[idx];
-
               if (op === 'up' && idx > 0) {
                 const t = cats[idx - 1];
                 cats[idx - 1] = cat;
@@ -2202,7 +2109,6 @@
               }
               return;
             }
-
             const cardOpBtn = e.target.closest('.cc-card-op');
             if (cardOpBtn) {
               const catId = cardOpBtn.dataset.catId;
@@ -2212,7 +2118,6 @@
               if (!cat) return;
               const card = cat.cards.find(function (c) { return c.id === cardId; });
               if (!card) return;
-
               if (op === 'send') {
                 const fn = window.sendAuditCard;
                 if (typeof fn === 'function') {
@@ -2246,7 +2151,6 @@
               }
               return;
             }
-
             if (catCheck) {
               const group = catCheck.closest('.cc-group');
               if (group) {
@@ -2264,8 +2168,7 @@
       }
     }
 
-    /* ---------------- 字卡合并对接 ---------------- */
-
+    /* ---------------- 字卡合并对接（修复问题4：适配原项目 mergeFiltered） ---------------- */
     function getMyAuditCardsRaw() {
       try {
         const out = [];
@@ -2283,11 +2186,8 @@
           });
         });
         return deepClone(out);
-      } catch (e) {
-        return [];
-      }
+      } catch (e) { return []; }
     }
-
     function myAuditCardsToGroups() {
       try {
         return window.__MY_AUDIT__.data.categories
@@ -2302,11 +2202,8 @@
                 .map(function (card) { return card.text; })
             };
           });
-      } catch (e) {
-        return [];
-      }
+      } catch (e) { return []; }
     }
-
     function mergeMyAuditGroups(original) {
       try {
         const src = Array.isArray(original) ? deepClone(original) : [];
@@ -2326,23 +2223,38 @@
       }
     }
 
+    // 覆盖原项目 replyPoolGroups / replyPoolGroupsFor
     function overrideReplyPools() {
       try {
-        if (typeof window.replyPoolGroups !== 'undefined' && Array.isArray(window.replyPoolGroups)) {
-          window.replyPoolGroups = mergeMyAuditGroups(window.replyPoolGroups);
-        }
-        if (typeof window.replyPoolGroupsFor === 'function' && !window.replyPoolGroupsFor.__myAuditPatched) {
-          const originalFn = window.replyPoolGroupsFor;
-          const patched = function () {
+        // 保存原函数
+        const originalReplyPoolGroups = window.replyPoolGroups;
+        const originalReplyPoolGroupsFor = window.replyPoolGroupsFor;
+
+        // 覆盖 replyPoolGroups
+        if (typeof originalReplyPoolGroups === 'function') {
+          window.replyPoolGroups = function () {
             try {
-              const res = originalFn.apply(this, arguments);
-              return mergeMyAuditGroups(res);
+              const originalResult = originalReplyPoolGroups.apply(this, arguments);
+              // 合并我们的字卡，过滤禁用
+              return mergeMyAuditGroups(originalResult);
             } catch (e) {
+              console.warn('[Audit] replyPoolGroups 合并失败', e);
               return myAuditCardsToGroups();
             }
           };
-          patched.__myAuditPatched = true;
-          window.replyPoolGroupsFor = patched;
+        }
+
+        // 覆盖 replyPoolGroupsFor
+        if (typeof originalReplyPoolGroupsFor === 'function') {
+          window.replyPoolGroupsFor = function (cid) {
+            try {
+              const originalResult = originalReplyPoolGroupsFor.apply(this, arguments);
+              return mergeMyAuditGroups(originalResult);
+            } catch (e) {
+              console.warn('[Audit] replyPoolGroupsFor 合并失败', e);
+              return myAuditCardsToGroups();
+            }
+          };
         }
       } catch (e) {
         console.warn('[Audit] 字卡池覆盖失败', e);
@@ -2350,19 +2262,16 @@
     }
 
     /* ---------------- 初始化 ---------------- */
-
     function init() {
       try {
         bindTabSwitch();
         overrideReplyPools();
         ensurePane();
         if (document.querySelector(TAB_SELECTOR)) ensurePane();
-
         window.addEventListener('my-audit-data-updated', function () {
           overrideReplyPools();
           refresh();
         });
-
         // 页面重建后补齐 pane 与字卡库
         let initTimer = null;
         const ob = new MutationObserver(function () {
@@ -2375,7 +2284,6 @@
           }, 500);
         });
         ob.observe(document.body, { childList: true, subtree: true });
-
         // 首次轮询补挂（应对延迟渲染的站点）
         let tries = 0;
         const timer = setInterval(function () {
@@ -2389,13 +2297,11 @@
         console.warn('[Audit] 模块二初始化失败', e);
       }
     }
-
     // 对外暴露
     window.getMyAuditCardsRaw = getMyAuditCardsRaw;
     window.myAuditCardsToGroups = myAuditCardsToGroups;
     window.mergeMyAuditGroups = mergeMyAuditGroups;
     window.__MY_AUDIT_CARD_UI__ = { render: renderCardLibrary, refresh: refresh };
-
     window.MY_AUDIT = {
       raw: getMyAuditCardsRaw,
       toGroups: myAuditCardsToGroups,
@@ -2406,12 +2312,10 @@
         refresh();
       }
     };
-
     if (document.readyState === 'interactive' || document.readyState === 'complete') {
       setTimeout(init, 1200);
     } else {
       window.addEventListener('DOMContentLoaded', function () { setTimeout(init, 1200); });
     }
   })();
-
 })();
