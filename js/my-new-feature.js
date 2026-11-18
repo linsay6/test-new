@@ -421,12 +421,18 @@
     }, 'maybeMischief');
   }
   
-  function autoSendCard() {
+    function autoSendCard() {
     safe(function () {
       if (!DB || !DB.groups) return; var validCards = [];
       try { for (var i = 0; i < DB.groups.length; i++) { var g = DB.groups[i]; if (g.disabledBy && g.disabledBy.length > 0) continue; for (var j = 0; j < g.cards.length; j++) { var c = g.cards[j]; if (c.disabledBy && c.disabledBy.length > 0) continue; if (c.text && c.text.trim()) validCards.push(c.text.trim()); } } } catch (e) { return; }
       if (validCards.length === 0) return; var randomText = validCards[Math.floor(Math.random() * validCards.length)];
-      var ok = injectBubbleToChat(randomText); if (ok) console.log('[审计] 梦角自动发送成功：', randomText);
+      
+      if (typeof window.sendAuditCard === 'function') {
+          window.sendAuditCard(randomText); 
+          console.log('[审计] 梦角自动发送成功：', randomText);
+      } else {
+          var ok = injectBubbleToChat(randomText); if (ok) console.log('[审计] 梦角自动发送成功(旧版)：', randomText);
+      }
     }, 'autoSendCard');
   }
   
