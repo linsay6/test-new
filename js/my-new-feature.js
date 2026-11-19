@@ -2503,48 +2503,46 @@ requestAnimationFrame(()=>{
         return Array.isArray(original) ? original : [];
       }
     }
-    function overrideReplyPools() {
-      try {
-        const originalReplyPoolGroups = window.replyPoolGroups;
-        const originalReplyPoolGroupsFor = window.replyPoolGroupsFor;
-
-        if (typeof originalReplyPoolGroups === 'function') {
-          window.replyPoolGroups = function () {
-            try {
-              const originalResult = originalReplyPoolGroups.apply(this, arguments);
-              return mergeMyAuditGroups(originalResult);
-            } catch (e) {
-              console.warn('[Audit] replyPoolGroups 合并失败', e);
-              return myAuditCardsToGroups();
-            }
-          };
-        }
-
-        if (typeof originalReplyPoolGroupsFor === 'function') {
-          window.replyPoolGroupsFor = function (cid) {
-            try {
-              const originalResult = originalReplyPoolGroupsFor.apply(this, arguments);
-              return mergeMyAuditGroups(originalResult);
-            } catch (e) {
-              console.warn('[Audit] replyPoolGroupsFor 合并失败', e);
-              return myAuditCardsToGroups();
-            }
-          };
-        }
-      } catch (e) {
-        console.warn('[Audit] 字卡池覆盖失败', e);
-      }
+    /**
+ * 获取合并后的完整字卡池：原生字卡 + 审核字卡
+ * @param {string} cid 对话id
+ * @returns {Object}
+ */
+function getMergeCardPool(cid) {
+  // 1.读取这个cid对应的原生字卡
+  const storeKey = `xy-home-v2:${cid}`;
+  const rawStr = localStorage.getItem(storeKey);
+  let nativeGroups = {};
+  if(rawStr){
+    try{
+      const storeData = JSON.parse(rawStr);
+      nativeGroups = storeData['cc-groups'] || {};
+    }catch(e){
+      nativeGroups = {};
     }
+  }
+  // 2.读取你的审核字卡
+  const auditGroups = myAuditCardsToGroups();
+  // 3.合并：同分组合并数组，不同分组保留
+  const result = JSON.parse(JSON.stringify(nativeGroups));
+  for(const groupName in auditGroups){
+    if(!Array.isArray(result[groupName])){
+      result[groupName] = [];
+    }
+    result[groupName] = [...result[groupName], ...auditGroups[groupName]];
+  }
+  return result;
+}
+// 调试用，挂载全局，控制台可以测试
+window.getMergeCardPool = getMergeCardPool;
 
     /* ---------------- 初始化 ---------------- */
     function init() {
       try {
         bindTabSwitch();
-        overrideReplyPools();
         ensurePane();
         if (document.querySelector(TAB_SELECTOR)) ensurePane();
         window.addEventListener('my-audit-data-updated', function () {
-          overrideReplyPools();
           refresh();
         });
         let initTimer = null;
@@ -2581,7 +2579,6 @@ requestAnimationFrame(()=>{
       merge: mergeMyAuditGroups,
       reload: function () {
         window.__MY_AUDIT__.reload();
-        overrideReplyPools();
         refresh();
       }
     };
