@@ -6,11 +6,11 @@
 <title>Mochi 字卡传讯（完全免费·禁止倒卖）</title>
 <meta name="description" content="情侣专属的字卡传讯，不是小手机。本站完全免费，任何收费均为倒卖诈骗；唯一作者：小红书@言序（1842523578）。如果你是花钱买来的链接：你被骗了，请拒付退款并举报卖家。">
 <meta name="theme-color" content="#e9e9e9">
-<link rel="manifest" href="./manifest.json">
+<link rel="manifest" href="/test-new/manifest.json">
 <!-- v3.5.158：站点图标用带 mochi 字母的 icon-512——Chrome 安卓通知左侧小图标取自站点图标 -->
-<link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
-<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
-<link rel="apple-touch-icon" href="./icon-180.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/test-new/icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/test-new/icon-192.png">
+<link rel="apple-touch-icon" href="/test-new/icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -22873,94 +22873,94 @@ else window.addEventListener('load', boot);
 if (window.__mochiLoaded) window.__mochiLoaded.push("pwa.js");
 } catch (__e) { if (window.__mochiErrLoaded) window.__mochiErrLoaded.push("pwa.js"); try { console.error("[JS] pwa.js", __e && __e.message || __e); } catch (x) {} if (window.__jsErrors) window.__jsErrors.push("[pwa.js] " + String(__e && __e.message || __e)); } })();
 window.__mochiBootRetry = function () { try { location.reload(); } catch (e) {} };(function () { function selfContained() { try { return location.protocol === "file:" || !document.querySelector("script[src]"); } catch (e0) { return false; } } function bar() {  if (selfContained()) return;  if (document.getElementById("boot-retry-bar")) return;  var off = 0; try { off = sessionStorage.getItem("mochi-boot-bar-off") === "1" ? 1 : 0; } catch (e6) {}  if (off) return;  var b = document.createElement("div");  b.className = "ver-update-bar"; b.id = "boot-retry-bar"; b.style.cursor = "pointer";  b.style.flexWrap = "wrap"; b.style.rowGap = "6px";  b.innerHTML = "<span class=\"vub-txt\">网络不佳·部分功能没加载完</span><b class=\"vub-act\">点此重试</b><b class=\"vub-act\" id=\"boot-retry-off\">知道了</b>";  b.addEventListener("click", function () { window.__mochiBootRetry(); });  var x = b.querySelector("#boot-retry-off");  if (x) x.addEventListener("click", function (ev) { ev.stopPropagation(); try { sessionStorage.setItem("mochi-boot-bar-off", "1"); } catch (e7) {} if (b.parentNode) b.parentNode.removeChild(b); });  (document.body || document.documentElement).appendChild(b); } function missing() { var e = window.__mochiJsFiles || [], g = window.__mochiLoaded || []; return Math.max(0, e.length - g.length - (window.__mochiErrLoaded || []).length); } function heal() {  try {   if (window.__mochiDataReady && missing() === 0) return;   if (selfContained()) return;   if (!navigator.onLine || missing() === 0) return;   var now = Date.now(), last = 0;   try { last = Number(sessionStorage.getItem("mochi-boot-heal")) || 0; } catch (e2) {}   if (now - last < 7200000) return;   try { sessionStorage.setItem("mochi-boot-heal", String(now)); } catch (e3) {}   setTimeout(function () { try { location.replace(location.href); } catch (e4) {} }, 400);  } catch (e) {} } function sweep() { var ex = (window.__mochiJsFiles || []).length, ok = !!window.__mochiDataReady && ex - (window.__mochiLoaded || []).length - (window.__mochiErrLoaded || []).length <= 0; var b = ok && document.getElementById("boot-retry-bar"); if (b && b.parentNode) b.parentNode.removeChild(b); return ok; } function check(auto) { var ok = sweep(); if (!ok) bar(); if (auto && typeof heal === "function") heal(); } try { document.addEventListener("mochi-restore-done", function () { setTimeout(sweep, 50); }); } catch (e5) {} if (document.readyState === "complete") { setTimeout(function(){check(false);}, 3000); setTimeout(function(){check(true);}, 8000); } else window.addEventListener("load", function () { setTimeout(function(){check(false);}, 3000); setTimeout(function(){check(true);}, 8000); });})();</script>
-<script defer src="js/idb.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('idb.js')"></script>
-<script defer src="js/contacts.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('contacts.js')"></script>
-<script defer src="js/applock.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('applock.js')"></script>
-<script defer src="js/card-lock.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('card-lock.js')"></script>
-<script defer src="js/dcp-master.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('dcp-master.js')"></script>
-<script defer src="js/media-pool.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('media-pool.js')"></script>
-<script defer src="js/storage-slim.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('storage-slim.js')"></script>
-<script defer src="js/perf-check.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('perf-check.js')"></script>
-<script defer src="js/energy-check.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('energy-check.js')"></script>
-<script defer src="js/flash-check.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('flash-check.js')"></script>
-<script defer src="js/img-compress.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('img-compress.js')"></script>
-<script defer src="js/img-ingest.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('img-ingest.js')"></script>
-<script defer src="js/clock.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('clock.js')"></script>
-<script defer src="js/entry-quiz.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('entry-quiz.js')"></script>
-<script defer src="js/entry-rules.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('entry-rules.js')"></script>
-<script defer src="js/tabs.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('tabs.js')"></script>
-<script defer src="js/desktop-slider.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('desktop-slider.js')"></script>
-<script defer src="js/quote-cards.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('quote-cards.js')"></script>
-<script defer src="js/personalize.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('personalize.js')"></script>
-<script defer src="js/chat.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('chat.js')"></script>
-<script defer src="js/group-chat.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('group-chat.js')"></script>
-<script defer src="js/chatcard.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('chatcard.js')"></script>
-<script defer src="js/chat-settings.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('chat-settings.js')"></script>
-<script defer src="js/reply-settings.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('reply-settings.js')"></script>
-<script defer src="js/fav-settings.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('fav-settings.js')"></script>
-<script defer src="js/default-cards-data.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('default-cards-data.js')"></script>
-<script defer src="js/dict-ext-data.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('dict-ext-data.js')"></script>
-<script defer src="js/default-cards.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('default-cards.js')"></script>
-<script defer src="js/quote-spell.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('quote-spell.js')"></script>
-<script defer src="js/dream-free.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('dream-free.js')"></script>
-<script defer src="js/mood-followup-data.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('mood-followup-data.js')"></script>
-<script defer src="js/mood-reply-cards.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('mood-reply-cards.js')"></script>
-<script defer src="js/ta-mood-data.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('ta-mood-data.js')"></script>
-<script defer src="js/ta-mood.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('ta-mood.js')"></script>
-<script defer src="js/fav-reason-data.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('fav-reason-data.js')"></script>
-<script defer src="js/fav-reason.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('fav-reason.js')"></script>
-<script defer src="js/music-player.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('music-player.js')"></script>
-<script defer src="js/calendar.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('calendar.js')"></script>
-<script defer src="js/divination.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('divination.js')"></script>
-<script defer src="js/avatar-lib.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('avatar-lib.js')"></script>
-<script defer src="js/ta-ask.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('ta-ask.js')"></script>
-<script defer src="js/ck-question.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('ck-question.js')"></script>
-<script defer src="js/incoming-requests.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('incoming-requests.js')"></script>
-<script defer src="js/ta-invite.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('ta-invite.js')"></script>
-<script defer src="js/bg-keep.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('bg-keep.js')"></script>
-<script defer src="js/records.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('records.js')"></script>
-<script defer src="js/call.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('call.js')"></script>
-<script defer src="js/mail.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('mail.js')"></script>
-<script defer src="js/feed.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('feed.js')"></script>
-<script defer src="js/loc-lib.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('loc-lib.js')"></script>
-<script defer src="js/p2-features.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('p2-features.js')"></script>
-<script defer src="js/gift-shop.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('gift-shop.js')"></script>
-<script defer src="js/memo-app.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('memo-app.js')"></script>
-<script defer src="js/memo-arc.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('memo-arc.js')"></script>
-<script defer src="js/my-arc.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('my-arc.js')"></script>
-<script defer src="js/period.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('period.js')"></script>
-<script defer src="js/accounting.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('accounting.js')"></script>
-<script defer src="js/garden.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('garden.js')"></script>
-<script defer src="js/room.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('room.js')"></script>
-<script defer src="js/drift-bottle.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('drift-bottle.js')"></script>
-<script defer src="js/decision.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('decision.js')"></script>
-<script defer src="js/group-decision.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('group-decision.js')"></script>
-<script defer src="js/pong.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('pong.js')"></script>
-<script defer src="js/snake-game.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('snake-game.js')"></script>
-<script defer src="js/breakout.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('breakout.js')"></script>
-<script defer src="js/connect-four.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('connect-four.js')"></script>
-<script defer src="js/coop-mine.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('coop-mine.js')"></script>
-<script defer src="js/fishing.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('fishing.js')"></script>
-<script defer src="js/memory-game.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('memory-game.js')"></script>
-<script defer src="js/gomoku.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('gomoku.js')"></script>
-<script defer src="js/linkup.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('linkup.js')"></script>
-<script defer src="js/match3.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('match3.js')"></script>
-<script defer src="js/auction.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('auction.js')"></script>
-<script defer src="js/arcade.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('arcade.js')"></script>
-<script defer src="js/mood-diary.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('mood-diary.js')"></script>
-<script defer src="js/sfx.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('sfx.js')"></script>
-<script defer src="js/fullscreen.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('fullscreen.js')"></script>
-<script defer src="js/data-backup.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('data-backup.js')"></script>
-<script defer src="js/feature-data.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('feature-data.js')"></script>
-<script defer src="js/update-remind.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('update-remind.js')"></script>
-<script defer src="js/cjian.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('cjian.js')"></script>
-<script defer src="js/feature-hub.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('feature-hub.js')"></script>
-<script defer src="js/settings-help.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('settings-help.js')"></script>
-<script defer src="js/onboarding.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('onboarding.js')"></script>
-<script defer src="js/page-coach.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('page-coach.js')"></script>
-<script defer src="js/card-audit.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('card-audit.js')"></script>
-<script defer src="js/storage-guide.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('storage-guide.js')"></script>
-<script defer src="js/mobile-adapt.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('mobile-adapt.js')"></script>
+<script defer src="/test-new/js/idb.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('idb.js')"></script>
+<script defer src="/test-new/js/contacts.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('contacts.js')"></script>
+<script defer src="/test-new/js/applock.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('applock.js')"></script>
+<script defer src="/test-new/js/card-lock.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('card-lock.js')"></script>
+<script defer src="/test-new/js/dcp-master.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('dcp-master.js')"></script>
+<script defer src="/test-new/js/media-pool.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('media-pool.js')"></script>
+<script defer src="/test-new/js/storage-slim.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('storage-slim.js')"></script>
+<script defer src="/test-new/js/perf-check.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('perf-check.js')"></script>
+<script defer src="/test-new/js/energy-check.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('energy-check.js')"></script>
+<script defer src="/test-new/js/flash-check.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('flash-check.js')"></script>
+<script defer src="/test-new/js/img-compress.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('img-compress.js')"></script>
+<script defer src="/test-new/js/img-ingest.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('img-ingest.js')"></script>
+<script defer src="/test-new/js/clock.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('clock.js')"></script>
+<script defer src="/test-new/js/entry-quiz.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('entry-quiz.js')"></script>
+<script defer src="/test-new/js/entry-rules.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('entry-rules.js')"></script>
+<script defer src="/test-new/js/tabs.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('tabs.js')"></script>
+<script defer src="/test-new/js/desktop-slider.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('desktop-slider.js')"></script>
+<script defer src="/test-new/js/quote-cards.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('quote-cards.js')"></script>
+<script defer src="/test-new/js/personalize.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('personalize.js')"></script>
+<script defer src="/test-new/js/chat.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('chat.js')"></script>
+<script defer src="/test-new/js/group-chat.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('group-chat.js')"></script>
+<script defer src="/test-new/js/chatcard.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('chatcard.js')"></script>
+<script defer src="/test-new/js/chat-settings.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('chat-settings.js')"></script>
+<script defer src="/test-new/js/reply-settings.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('reply-settings.js')"></script>
+<script defer src="/test-new/js/fav-settings.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('fav-settings.js')"></script>
+<script defer src="/test-new/js/default-cards-data.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('default-cards-data.js')"></script>
+<script defer src="/test-new/js/dict-ext-data.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('dict-ext-data.js')"></script>
+<script defer src="/test-new/js/default-cards.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('default-cards.js')"></script>
+<script defer src="/test-new/js/quote-spell.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('quote-spell.js')"></script>
+<script defer src="/test-new/js/dream-free.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('dream-free.js')"></script>
+<script defer src="/test-new/js/mood-followup-data.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('mood-followup-data.js')"></script>
+<script defer src="/test-new/js/mood-reply-cards.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('mood-reply-cards.js')"></script>
+<script defer src="/test-new/js/ta-mood-data.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('ta-mood-data.js')"></script>
+<script defer src="/test-new/js/ta-mood.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('ta-mood.js')"></script>
+<script defer src="/test-new/js/fav-reason-data.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('fav-reason-data.js')"></script>
+<script defer src="/test-new/js/fav-reason.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('fav-reason.js')"></script>
+<script defer src="/test-new/js/music-player.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('music-player.js')"></script>
+<script defer src="/test-new/js/calendar.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('calendar.js')"></script>
+<script defer src="/test-new/js/divination.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('divination.js')"></script>
+<script defer src="/test-new/js/avatar-lib.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('avatar-lib.js')"></script>
+<script defer src="/test-new/js/ta-ask.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('ta-ask.js')"></script>
+<script defer src="/test-new/js/ck-question.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('ck-question.js')"></script>
+<script defer src="/test-new/js/incoming-requests.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('incoming-requests.js')"></script>
+<script defer src="/test-new/js/ta-invite.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('ta-invite.js')"></script>
+<script defer src="/test-new/js/bg-keep.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('bg-keep.js')"></script>
+<script defer src="/test-new/js/records.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('records.js')"></script>
+<script defer src="/test-new/js/call.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('call.js')"></script>
+<script defer src="/test-new/js/mail.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('mail.js')"></script>
+<script defer src="/test-new/js/feed.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('feed.js')"></script>
+<script defer src="/test-new/js/loc-lib.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('loc-lib.js')"></script>
+<script defer src="/test-new/js/p2-features.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('p2-features.js')"></script>
+<script defer src="/test-new/js/gift-shop.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('gift-shop.js')"></script>
+<script defer src="/test-new/js/memo-app.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('memo-app.js')"></script>
+<script defer src="/test-new/js/memo-arc.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('memo-arc.js')"></script>
+<script defer src="/test-new/js/my-arc.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('my-arc.js')"></script>
+<script defer src="/test-new/js/period.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('period.js')"></script>
+<script defer src="/test-new/js/accounting.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('accounting.js')"></script>
+<script defer src="/test-new/js/garden.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('garden.js')"></script>
+<script defer src="/test-new/js/room.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('room.js')"></script>
+<script defer src="/test-new/js/drift-bottle.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('drift-bottle.js')"></script>
+<script defer src="/test-new/js/decision.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('decision.js')"></script>
+<script defer src="/test-new/js/group-decision.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('group-decision.js')"></script>
+<script defer src="/test-new/js/pong.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('pong.js')"></script>
+<script defer src="/test-new/js/snake-game.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('snake-game.js')"></script>
+<script defer src="/test-new/js/breakout.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('breakout.js')"></script>
+<script defer src="/test-new/js/connect-four.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('connect-four.js')"></script>
+<script defer src="/test-new/js/coop-mine.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('coop-mine.js')"></script>
+<script defer src="/test-new/js/fishing.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('fishing.js')"></script>
+<script defer src="/test-new/js/memory-game.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('memory-game.js')"></script>
+<script defer src="/test-new/js/gomoku.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('gomoku.js')"></script>
+<script defer src="/test-new/js/linkup.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('linkup.js')"></script>
+<script defer src="/test-new/js/match3.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('match3.js')"></script>
+<script defer src="/test-new/js/auction.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('auction.js')"></script>
+<script defer src="/test-new/js/arcade.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('arcade.js')"></script>
+<script defer src="/test-new/js/mood-diary.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('mood-diary.js')"></script>
+<script defer src="/test-new/js/sfx.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('sfx.js')"></script>
+<script defer src="/test-new/js/fullscreen.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('fullscreen.js')"></script>
+<script defer src="/test-new/js/data-backup.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('data-backup.js')"></script>
+<script defer src="/test-new/js/feature-data.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('feature-data.js')"></script>
+<script defer src="/test-new/js/update-remind.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('update-remind.js')"></script>
+<script defer src="/test-new/js/cjian.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('cjian.js')"></script>
+<script defer src="/test-new/js/feature-hub.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('feature-hub.js')"></script>
+<script defer src="/test-new/js/settings-help.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('settings-help.js')"></script>
+<script defer src="/test-new/js/onboarding.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('onboarding.js')"></script>
+<script defer src="/test-new/js/page-coach.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('page-coach.js')"></script>
+<script defer src="/test-new/js/card-audit.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('card-audit.js')"></script>
+<script defer src="/test-new/js/storage-guide.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('storage-guide.js')"></script>
+<script defer src="/test-new/js/mobile-adapt.js" onerror="window.__mochiExtFail=(window.__mochiExtFail||[]).concat('mobile-adapt.js')"></script>
 <!-- PERF-PLAN 阶段 1：上一行是 ext 外置脚本 defer 注入锚，构建时被整体替换为 35 个外置 js 标签；本行说明必须连同注释符号一起整体留在注释内，勿删。#797 教训：说明若写在注释结尾之外＝变正文裸文本（全页面右侧白色乱码条），其中的标签样本会被浏览器当真开标签，吞掉其后全部尾部 DOM -->
 
   <!-- PWA 安装到桌面按钮（Chrome/Edge 触发 beforeinstallprompt 时显示） -->
@@ -23012,7 +23012,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(forceEnter, 200);
 });
 </script>
-     <script src="js/my-new-feature.js"></script>
+     <js/my-new-feature.js"></script>
 </body>
 </html>
 <!-- __MOCHI_EOF__ mvun297n -->
