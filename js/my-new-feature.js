@@ -1495,7 +1495,7 @@
     }
    function getChatContainer() {
     return new Promise((resolve) => {
-    const selector = '[role="feed"],.message-feed,.chat-list,.message-list,.msg-list,.chat-msgs';
+   const selector = '#chat-body,.chat-body,.msg-bubble,.msg-in,.msg-out';
 let retryCount = 0;
 const maxRetry = 40;
 const interval = 200;
