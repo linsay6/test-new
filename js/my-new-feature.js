@@ -1514,7 +1514,9 @@ const interval = 200;
         check();
     });
 }
-
+function restoreInjectedFromStorage() {
+  return Promise.resolve();
+}
     function buildInjectedNode(text, side, style) {
       const node = document.createElement('div');
       node.dataset.maInjected = '1';
