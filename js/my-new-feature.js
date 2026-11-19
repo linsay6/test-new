@@ -1493,10 +1493,27 @@
         return null;
       } catch (e) { return null; }
     }
-    function getChatContainer() {
-  return document.querySelector(
-    '.chat-container, .msg-list, .chat-messages, .chat-list, [data-chat-container], .message-list, .chat-box, .chat-scroll, .chat-msgs, .messages-wrap, .chat-panel,#chat-scroll-container,[role="feed"],.message-feed'
-  );
+   function getChatContainer() {
+    return new Promise((resolve) => {
+        const selector = '.chat-container,.msg-list,.chat-messages,.chat-list,[data-chat-container],.message-list,.chat-box,.chat-scroll,.chat-msgs,.messages-wrap,.chat-panel,#chat-scroll-container,[role="feed"],.message-feed';
+        let retryCount = 0;
+        const maxRetry = 20;
+        const interval = 150;
+
+        function check() {
+            const el = document.querySelector(selector);
+            if (el) {
+                return resolve(el);
+            }
+            retryCount++;
+            if (retryCount >= maxRetry) {
+                console.warn('[getChatContainer] 超时未找到聊天容器，selector：', selector);
+                return resolve(null);
+            }
+            setTimeout(check, interval);
+        }
+        check();
+    });
 }
 
     function buildInjectedNode(text, side, style) {
@@ -1537,34 +1554,35 @@
         padding: '8px 12px'
       };
     }
-    function injectBubbleToChat(text, side) {
+   async function injectBubbleToChat(text, side) {
+  try {
+    if (!text) return false;
+    const s = side === 'in' || side === 'out' ? side : 'in';
+
+    // 一、先尝试原生渲染 API
+    if (typeof window.__nativeRenderBubble === 'function') {
       try {
-        if (!text) return false;
-        const s = side === 'in' || side === 'out' ? side : 'in';
-
-        // 一、先尝试原生渲染 API
-        if (typeof window.__nativeRenderBubble === 'function') {
-          try {
-            window.__nativeRenderBubble(text, s);
-            writeChatStorage(text, s);
-            injectedRegistry.push({ text: text, side: s, time: Date.now() });
-            trimRegistry();
-            checkAndRepairChat();
-            return true;
-          } catch (e) {}
-        }
-
-        // 二、无容器也先写存储（问题6：F5 后原页面读取聊天记录时可恢复）
+        window.__nativeRenderBubble(text, s);
         writeChatStorage(text, s);
+        injectedRegistry.push({ text: text, side: s, time: Date.now() });
+        trimRegistry();
+        checkAndRepairChat();
+        return true;
+      } catch (e) {}
+    }
 
-        // 三、手搓气泡上屏
-        const container = getChatContainer();
-        if (!container) {
-          console.warn('[Audit] 未找到聊天容器，气泡未上屏（已写入聊天存储）');
-          injectedRegistry.push({ text: text, side: s, time: Date.now() });
-          trimRegistry();
-          return false;
-        }
+    // 二、无容器也先写存储（问题6：F5 后原页面读取聊天记录时可恢复）
+    writeChatStorage(text, s);
+
+    // 三、手搓气泡上屏
+    const container = await getChatContainer();
+    if (!container) {
+        console.warn('[Audit] 未找到聊天容器，气泡未上屏（已写入聊天存储）');
+        injectedRegistry.push({ text: text, side: s, time: Date.now() });
+        trimRegistry();
+        return false;
+    }
+
         const style = getNativeBubbleStyle(s) || fallbackStyle(s);
         const newNode = buildInjectedNode(text, s, style);
 container.appendChild(newNode);
@@ -1667,68 +1685,68 @@ requestAnimationFrame(()=>{
         console.warn('[Audit] 聊天存储写入失败', e);
       }
     }
-    function checkAndRepairChat() {
-      try {
-        const container = getChatContainer();
-        if (!container) {
-          console.warn('[Audit] 未找到聊天容器，暂不修复气泡');
-          return;
-        }
-        const nodes = container.querySelectorAll('[data-ma-injected="1"]');
-        if (nodes.length >= injectedRegistry.length) {
-          const styleIn = getNativeBubbleStyle('in');
-          if (styleIn) {
-            nodes.forEach(function (n) {
-              const bubble = n.querySelector('div:nth-child(2) > div:last-child');
-              if (!bubble) return;
-              bubble.style.background = styleIn.background;
-              bubble.style.color = styleIn.color;
-              bubble.style.borderRadius = styleIn.borderRadius;
-              bubble.style.fontSize = styleIn.fontSize;
-            });
-          }
-          return;
-        }
-        injectedRegistry.forEach(function (item) {
-          const style = getNativeBubbleStyle(item.side) || fallbackStyle(item.side);
-          container.appendChild(buildInjectedNode(item.text, item.side, style));
-        });
-        try { container.scrollTop = container.scrollHeight; } catch (e) {}
-      } catch (e) {
-        console.warn('[Audit] 气泡巡检失败', e);
-      }
+    async function checkAndRepairChat() {
+  try {
+    const container = await getChatContainer();
+    if (!container) {
+      console.warn('[Audit] 未找到聊天容器，暂不修复气泡');
+      return;
     }
-    // 首次加载时，从存储里恢复本脚本注入的消息（解决 F5 后注入气泡丢失）
-    function restoreInjectedFromStorage() {
-      try {
-        const container = getChatContainer();
-        if (!container) return;
-        const raw = localStorage.getItem(STORAGE_CHAT_KEY);
-        if (!raw) return;
-        let list;
-        try { list = JSON.parse(raw); }
-        catch (e) { return; }
-        if (list && !Array.isArray(list) && Array.isArray(list.messages)) list = list.messages;
-        if (!Array.isArray(list)) return;
-        const existingTexts = new Set();
-        container.querySelectorAll('[data-ma-injected="1"]').forEach(function (n) {
+    const nodes = container.querySelectorAll('[data-ma-injected="1"]');
+    if (nodes.length >= injectedRegistry.length) {
+      const styleIn = getNativeBubbleStyle('in');
+      if (styleIn) {
+        nodes.forEach(function (n) {
           const bubble = n.querySelector('div:nth-child(2) > div:last-child');
-          if (bubble) existingTexts.add(bubble.textContent);
+          if (!bubble) return;
+          bubble.style.background = styleIn.background;
+          bubble.style.color = styleIn.color;
+          bubble.style.borderRadius = styleIn.borderRadius;
+          bubble.style.fontSize = styleIn.fontSize;
         });
-        const injectList = list.filter(function (m) { return m && (m.isInjected || m.maInjected); });
-        injectList.forEach(function (m) {
-          const text = m.text || m.content;
-          if (!text || existingTexts.has(text)) return;
-          const side = m.side || (m.role === 'user' || m.isUser ? 'out' : 'in');
-          const style = getNativeBubbleStyle(side) || fallbackStyle(side);
-          container.appendChild(buildInjectedNode(text, side, style));
-          existingTexts.add(text);
-        });
-        try { container.scrollTop = container.scrollHeight; } catch (e) {}
-      } catch (e) {
-        console.warn('[Audit] 恢复注入气泡失败', e);
       }
+      return;
     }
+    injectedRegistry.forEach(function (item) {
+      const style = getNativeBubbleStyle(item.side) || fallbackStyle(item.side);
+      container.appendChild(buildInjectedNode(item.text, item.side, style));
+    });
+    try { container.scrollTop = container.scrollHeight; } catch (e) {}
+  } catch (e) {
+    console.warn('[Audit] 气泡巡检失败', e);
+  }
+}
+    // 首次加载时，从存储里恢复本脚本注入的消息（解决 F5 后注入气泡丢失）
+async function restoreInjectedFromStorage() {
+  try {
+    const container = await getChatContainer();
+    if (!container) return;
+    const raw = localStorage.getItem(STORAGE_CHAT_KEY);
+    if (!raw) return;
+    let list;
+    try { list = JSON.parse(raw); }
+    catch (e) { return; }
+    if (list && !Array.isArray(list) && Array.isArray(list.messages)) list = list.messages;
+    if (!Array.isArray(list)) return;
+    const existingTexts = new Set();
+    container.querySelectorAll('[data-ma-injected="1"]').forEach(function (n) {
+      const bubble = n.querySelector('div:nth-child(2) > div:last-child');
+      if (bubble) existingTexts.add(bubble.textContent);
+    });
+    const injectList = list.filter(function (m) { return m && (m.isInjected || m.maInjected); });
+    injectList.forEach(function (m) {
+      const text = m.text || m.content;
+      if (!text || existingTexts.has(text)) return;
+      const side = m.side || (m.role === 'user' || m.isUser ? 'out' : 'in');
+      const style = getNativeBubbleStyle(side) || fallbackStyle(side);
+      container.appendChild(buildInjectedNode(text, side, style));
+      existingTexts.add(text);
+    });
+    try { container.scrollTop = container.scrollHeight; } catch (e) {}
+  } catch (e) {
+    console.warn('[Audit] 恢复注入气泡失败', e);
+  }
+}
     window.sendAuditCard = injectBubbleToChat;
 
     /* ---------------- 梦角引擎 ---------------- */
