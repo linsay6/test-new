@@ -2019,15 +2019,17 @@
         return null;
       }
     }
-    function markTabActive(active) {
+        function markTabActive(active) {
       try {
+        // 先全部清除所有tab激活样式
         document.querySelectorAll('[data-ccsel]').forEach(function (el) {
-          if (el.matches(TAB_SELECTOR)) {
-            el.classList.toggle('cc-tab-active', !!active);
-          } else if (active) {
-            el.classList.remove('cc-tab-active');
-          }
+          el.classList.remove('cc-tab-active');
         });
+        // 只有我们自己tab才加上激活样式
+        if (active) {
+          const ourTab = document.querySelector(TAB_SELECTOR);
+          if (ourTab) ourTab.classList.add('cc-tab-active');
+        }
         const tab = document.querySelector(TAB_SELECTOR);
         if (tab) {
           let badge = tab.querySelector('.cc-tab-badge');
@@ -2064,31 +2066,27 @@
         console.warn('[Audit] Tab 交还失败', e);
       }
     }
-    function bindTabSwitch() {
-  try {
-    document.addEventListener('click', function (e) {
-      const tab = e.target.closest('[data-ccsel]');
-      // 点击【我方tab】
-      if (tab && tab.matches(TAB_SELECTOR)) {
-        showPane();
-        return;
-      }
-      // 只要点击不在我方tab元素范围内，就执行交还逻辑
-      const clickInsideOurTab = e.target.closest(TAB_SELECTOR);
-      if (!clickInsideOurTab) {
-        hidePane();
-        // 恢复全部原生sect
-        document.querySelectorAll('[id^="cc-sect-"]').forEach(el => {
-          if(el.id !== PANE_ID) {
-            el.hidden = false;
+        function bindTabSwitch() {
+      try {
+        document.addEventListener('click', function (e) {
+          const tab = e.target.closest('[data-ccsel]');
+          // 点击我们新增的【审核报告字卡】tab
+          if (tab && tab.matches(TAB_SELECTOR)) {
+            showPane();
+            return;
           }
-        });
+          // 点击任意其他原生Tab（可自定义字卡 / 系统预设字卡）：交还控制权，恢复原生页面
+          if (tab) {
+            hidePane();
+            document.querySelectorAll('[id^="cc-sect-"]').forEach(el => {
+              el.hidden = false;
+            });
+          }
+        }, false);
+      } catch (e) {
+        console.warn('[Audit] Tab切换绑定失败', e);
       }
-    }, false);
-  } catch (e) {
-    console.warn('[Audit] Tab切换绑定失败', e);
-  }
-}
+    }
 
     /* ---------------- 字卡库 UI ---------------- */
     function buildHTML() {
