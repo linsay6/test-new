@@ -1556,64 +1556,128 @@ function restoreInjectedFromStorage() {
         padding: '8px 12px'
       };
     }
-   async function injectBubbleToChat(text, side) {
-  try {
-    if (!text) return false;
-    const s = side === 'in' || side === 'out' ? side : 'in';
-    console.log('[Audit-发送] 准备发送气泡，文本：', text, '方向：', s);
+   // ===== 消息队列 + 容器监听防刷模块（新增配套全局变量，放在这个函数上方！！）
+let msgRenderQueue = [];
+let chatContainerObs = null;
+let containerObserver = null;
 
-    // 一、先尝试原生渲染 API
-    if (typeof window.__nativeRenderBubble === 'function') {
-      try {
-        window.__nativeRenderBubble(text, s);
+// 初始化容器监听，检测页面框架清空DOM，自动重绘队列消息
+function initChatObserver() {
+    chatContainerObs = null;
+    getChatContainer().then(container => {
+        chatContainerObs = container;
+        if (!chatContainerObs) {
+            console.log("[Audit] 聊天容器暂时不存在，800ms后重试监听");
+            setTimeout(initChatObserver, 800);
+            return;
+        }
+        // 销毁旧监听
+        if (containerObserver) containerObserver.disconnect();
+        containerObserver = new MutationObserver((mutList) => {
+            // 当聊天容器子节点被清空，自动重绘队列内全部消息
+            if (chatContainerObs.children.length === 0 && msgRenderQueue.length > 0) {
+                console.log("[Audit] 检测到页面清空聊天DOM，自动恢复气泡");
+                msgRenderQueue.forEach(item => renderSingleMsg(item));
+                scrollChatBottom();
+            }
+        });
+        containerObserver.observe(chatContainerObs, { childList: true });
+        console.log("[Audit] 聊天容器防刷监听启动成功");
+    })
+}
+// 渲染单条气泡，createElement方式，不用innerHTML
+function renderSingleMsg(msgInfo) {
+    if (!chatContainerObs) return;
+    const bubbleWrap = document.createElement('div');
+    bubbleWrap.dataset.maInjected = '1';
+    bubbleWrap.style.cssText = 'display:flex;align-items:flex-start;gap:8px;margin:10px 0;' +
+        'flex-direction:' + (msgInfo.side === 'in' ? 'row' : 'row-reverse') + ';';
+    const avatarWrap = document.createElement('div');
+    avatarWrap.style.cssText = 'width:34px;height:34px;border-radius:50%;flex-shrink:0;overflow:hidden;' +
+        'background:' + (msgInfo.side === 'in' ? '#e5e7eb' : '#3b82f6') + ';';
+    const avatarImg = window.__MY_AUDIT__.data.settings.floatingBall.avatar;
+    if (avatarImg) {
+        avatarWrap.innerHTML = '<img src="' + avatarImg + '" style="width:100%;height:100%;object-fit:cover;display:block;">';
+    }
+    const content = document.createElement('div');
+    content.style.cssText = 'display:flex;flex-direction:column;max-width:72%;align-items:' +
+        (msgInfo.side === 'in' ? 'flex-start' : 'flex-end') + ';';
+    const timeEl = document.createElement('div');
+    timeEl.style.cssText = 'font-size:11px;color:#9ca3af;margin:0 2px 3px;';
+    timeEl.textContent = msgInfo.timeStr;
+    const style = getNativeBubbleStyle(msgInfo.side) || fallbackStyle(msgInfo.side);
+    const bubble = document.createElement('div');
+    bubble.style.cssText = 'background:' + style.background + ';color:' + style.color + ';' +
+        'border-radius:' + style.borderRadius + ';font-size:' + style.fontSize + ';padding:' + style.padding + ';' +
+        'word-break:break-word;line-height:1.5;';
+    bubble.textContent = msgInfo.text;
+    content.appendChild(timeEl);
+    content.appendChild(bubble);
+    bubbleWrap.appendChild(avatarWrap);
+    bubbleWrap.appendChild(content);
+    chatContainerObs.appendChild(bubbleWrap);
+}
+function scrollChatBottom() {
+    if (chatContainerObs) {
+        chatContainerObs.scrollTop = chatContainerObs.scrollHeight;
+        if (typeof window.scrollToBottom === 'function') window.scrollToBottom();
+    }
+}
+async function injectBubbleToChat(text, side) {
+    try {
+        if (!text) return false;
+        const s = side === 'in' || side === 'out' ? side : 'in';
+        console.log('[Audit-发送] 准备发送气泡，文本：', text, '方向：', s);
+
+        // 一、先尝试原生渲染 API
+        if (typeof window.__nativeRenderBubble === 'function') {
+            try {
+                window.__nativeRenderBubble(text, s);
+                writeChatStorage(text, s);
+                injectedRegistry.push({ text: text, side: s, time: Date.now() });
+                trimRegistry();
+                checkAndRepairChat();
+                console.log('[Audit-发送] 使用原生渲染API发送成功');
+                return true;
+            } catch (e) {
+                console.warn('[Audit-发送] 原生API调用失败', e);
+            }
+        }
+        // 存入消息队列，用于监听自动恢复
+        const msgItem = {
+            text: text,
+            side: s,
+            time: Date.now(),
+            timeStr: formatTime(new Date())
+        };
+        msgRenderQueue.push(msgItem);
+
+        // 二、写入本地聊天存储（F5不丢失）
         writeChatStorage(text, s);
+        console.log('[Audit-发送] 聊天记录已写入localStorage');
+
+        // 三、渲染气泡
+        const container = await getChatContainer();
+        if (!container) {
+            console.warn('[Audit-发送] 未找到聊天容器，气泡存入队列+存储，等待容器出现自动渲染');
+            injectedRegistry.push({ text: text, side: s, time: Date.now() });
+            trimRegistry();
+            return false;
+        }
+        chatContainerObs = container;
+        renderSingleMsg(msgItem);
+        void chatContainerObs.offsetHeight;
+        requestAnimationFrame(() => {
+            scrollChatBottom();
+        });
         injectedRegistry.push({ text: text, side: s, time: Date.now() });
         trimRegistry();
         checkAndRepairChat();
-        console.log('[Audit-发送] 使用原生渲染API发送成功');
         return true;
-      } catch (e) {
-        console.warn('[Audit-发送] 原生API调用失败', e);
-      }
-    }
-
-    // 二、无容器也先写存储（问题6：F5 后原页面读取聊天记录时可恢复）
-    writeChatStorage(text, s);
-    console.log('[Audit-发送] 聊天记录已写入localStorage');
-
-    // 三、手搓气泡上屏
-    const container = await getChatContainer();
-    if (!container) {
-        console.warn('[Audit-发送] 未找到聊天容器，气泡仅存入存储，页面不实时显示');
-        injectedRegistry.push({ text: text, side: s, time: Date.now() });
-        trimRegistry();
+    } catch (e) {
+        console.error('[Audit-发送] 气泡注入整体异常', e);
         return false;
     }
-    console.log('[Audit-发送] 成功获取聊天容器', container);
-
-    const style = getNativeBubbleStyle(s) || fallbackStyle(s);
-    const newNode = buildInjectedNode(text, s, style);
-    container.appendChild(newNode);
-    // 强制浏览器触发布局回流，解决DOM插入但是页面看不见
-    void newNode.offsetHeight;
-    requestAnimationFrame(()=>{
-      try {
-        container.scrollTop = container.scrollHeight;
-        // 如果原页面有滚动函数，优先调用
-        if(typeof window.scrollToBottom === 'function') window.scrollToBottom();
-        console.log('[Audit-发送] DOM气泡插入完成，滚动到底部');
-      } catch (e) {
-        console.warn('[Audit]滚动失败',e);
-      }
-    });
-    injectedRegistry.push({ text: text, side: s, time: Date.now() });
-    trimRegistry();
-    checkAndRepairChat();
-    return true;
-  } catch (e) {
-    console.error('[Audit-发送] 气泡注入整体异常', e);
-    return false;
-  }
 }
     function trimRegistry() {
       while (injectedRegistry.length > 50) injectedRegistry.shift();
@@ -1942,11 +2006,12 @@ async function restoreInjectedFromStorage() {
         console.warn('[Audit] 自愈监听初始化失败', e);
       }
     }
-    function init() {
+       function init() {
       try {
         ensureAuditIcon();
         createFloatingBall();
         initObserver();
+        initChatObserver(); // 新增：启动聊天容器防刷监听
         startDreamEngine();
         // 恢复 F5 前注入到聊天记录里的消息（问题6）
         setTimeout(restoreInjectedFromStorage, 1500);
