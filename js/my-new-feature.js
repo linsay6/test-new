@@ -1495,10 +1495,11 @@
     }
    function getChatContainer() {
     return new Promise((resolve) => {
-   const selector = '#chat-body,.chat-body,.msg-bubble,.msg-in,.msg-out';
-let retryCount = 0;
-const maxRetry = 40;
-const interval = 200;
+        // 适配xy-home聊天DOM，优先主聊天滚动容器
+        const selector = '#chat-body, .chat-body, .chat-list, .message-list, .msg-wrap, .bubble-wrap, [data-role="chat-list"], .chat-content';
+        let retryCount = 0;
+        const maxRetry = 40;
+        const interval = 200;
         function check() {
             const el = document.querySelector(selector);
             if (el) {
@@ -1559,6 +1560,7 @@ function restoreInjectedFromStorage() {
   try {
     if (!text) return false;
     const s = side === 'in' || side === 'out' ? side : 'in';
+    console.log('[Audit-发送] 准备发送气泡，文本：', text, '方向：', s);
 
     // 一、先尝试原生渲染 API
     if (typeof window.__nativeRenderBubble === 'function') {
@@ -1568,45 +1570,51 @@ function restoreInjectedFromStorage() {
         injectedRegistry.push({ text: text, side: s, time: Date.now() });
         trimRegistry();
         checkAndRepairChat();
+        console.log('[Audit-发送] 使用原生渲染API发送成功');
         return true;
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[Audit-发送] 原生API调用失败', e);
+      }
     }
 
     // 二、无容器也先写存储（问题6：F5 后原页面读取聊天记录时可恢复）
     writeChatStorage(text, s);
+    console.log('[Audit-发送] 聊天记录已写入localStorage');
 
     // 三、手搓气泡上屏
     const container = await getChatContainer();
     if (!container) {
-        console.warn('[Audit] 未找到聊天容器，气泡未上屏（已写入聊天存储）');
+        console.warn('[Audit-发送] 未找到聊天容器，气泡仅存入存储，页面不实时显示');
         injectedRegistry.push({ text: text, side: s, time: Date.now() });
         trimRegistry();
         return false;
     }
+    console.log('[Audit-发送] 成功获取聊天容器', container);
 
-        const style = getNativeBubbleStyle(s) || fallbackStyle(s);
-        const newNode = buildInjectedNode(text, s, style);
-container.appendChild(newNode);
-// 强制浏览器触发布局回流，解决DOM插入但是页面看不见
-void newNode.offsetHeight;
-requestAnimationFrame(()=>{
-  try {
-    container.scrollTop = container.scrollHeight;
-    // 如果原页面有滚动函数，优先调用
-    if(typeof window.scrollToBottom === 'function') window.scrollToBottom();
-  } catch (e) {
-    console.warn('[Audit]滚动失败',e);
-  }
-});
-        injectedRegistry.push({ text: text, side: s, time: Date.now() });
-        trimRegistry();
-        checkAndRepairChat();
-        return true;
+    const style = getNativeBubbleStyle(s) || fallbackStyle(s);
+    const newNode = buildInjectedNode(text, s, style);
+    container.appendChild(newNode);
+    // 强制浏览器触发布局回流，解决DOM插入但是页面看不见
+    void newNode.offsetHeight;
+    requestAnimationFrame(()=>{
+      try {
+        container.scrollTop = container.scrollHeight;
+        // 如果原页面有滚动函数，优先调用
+        if(typeof window.scrollToBottom === 'function') window.scrollToBottom();
+        console.log('[Audit-发送] DOM气泡插入完成，滚动到底部');
       } catch (e) {
-        console.warn('[Audit] 气泡注入失败', e);
-        return false;
+        console.warn('[Audit]滚动失败',e);
       }
-    }
+    });
+    injectedRegistry.push({ text: text, side: s, time: Date.now() });
+    trimRegistry();
+    checkAndRepairChat();
+    return true;
+  } catch (e) {
+    console.error('[Audit-发送] 气泡注入整体异常', e);
+    return false;
+  }
+}
     function trimRegistry() {
       while (injectedRegistry.length > 50) injectedRegistry.shift();
     }
@@ -2610,26 +2618,4 @@ window.getMergeCardPool = getMergeCardPool;
       window.addEventListener('DOMContentLoaded', function () { setTimeout(init, 1200); });
     }
   })();
-})();
-// 测试代码：验证等待聊天容器、气泡注入逻辑
-(async function testAuditBubble() {
-    console.log('[测试] 开始执行容器与气泡测试');
-    try {
-       
-        // 测试2：注入一条in方向气泡
-        const res1 = await injectBubbleToChat('这是一条测试in消息（梦角发送）', 'in');
-        console.log('[测试] in气泡注入结果：', res1);
-
-        // 测试3：注入一条out方向气泡
-        const res2 = await injectBubbleToChat('这是一条测试out消息（用户发送）', 'out');
-        console.log('[测试] out气泡注入结果：', res2);
-
-        // 测试4：气泡修复巡检
-        await checkAndRepairChat();
-        console.log('[测试] checkAndRepairChat 巡检完成');
-
-        console.log('[测试] 全部测试流程跑完！');
-    } catch (err) {
-        console.error('[测试] 测试过程报错：', err);
-    }
 })();
