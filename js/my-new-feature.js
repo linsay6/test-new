@@ -228,7 +228,7 @@
       border-radius: 14px; display: block;
     }
     .audit-badge {
-      position: absolute; top: 4px; right: 4px;
+      position: absolute; top: -2px; right: 2px;
       min-width: 18px; height: 18px; line-height: 16px;
       padding: 0 4px; background: #fff;
       border: 1px solid #e5e7eb; border-radius: 9px;
@@ -1548,6 +1548,7 @@
             writeChatStorage(text, s);
             injectedRegistry.push({ text: text, side: s, time: Date.now() });
             trimRegistry();
+            checkAndRepairChat();
             return true;
           } catch (e) {}
         }
@@ -1564,8 +1565,19 @@
           return false;
         }
         const style = getNativeBubbleStyle(s) || fallbackStyle(s);
-        container.appendChild(buildInjectedNode(text, s, style));
-        try { container.scrollTop = container.scrollHeight; } catch (e) {}
+        const newNode = buildInjectedNode(text, s, style);
+container.appendChild(newNode);
+// 强制浏览器触发布局回流，解决DOM插入但是页面看不见
+void newNode.offsetHeight;
+requestAnimationFrame(()=>{
+  try {
+    container.scrollTop = container.scrollHeight;
+    // 如果原页面有滚动函数，优先调用
+    if(typeof window.scrollToBottom === 'function') window.scrollToBottom();
+  } catch (e) {
+    console.warn('[Audit]滚动失败',e);
+  }
+});
         injectedRegistry.push({ text: text, side: s, time: Date.now() });
         trimRegistry();
         return true;
@@ -2014,22 +2026,29 @@
       }
     }
     function bindTabSwitch() {
-      try {
-        document.addEventListener('click', function (e) {
-          const tab = e.target.closest ? e.target.closest('[data-ccsel]') : null;
-          if (!tab) return;
-          if (tab.matches(TAB_SELECTOR)) {
-            setTimeout(showPane, 0);
-            showPane();
-          } else {
-            setTimeout(hidePane, 0);
-            hidePane();
+  try {
+    document.addEventListener('click', function (e) {
+      const tab = e.target.closest ? e.target.closest('[data-ccsel]') : null;
+      if (!tab) return;
+      // 判断是否点击我们自己的tab
+      if (tab.matches(TAB_SELECTOR)) {
+        showPane();
+      } else {
+        // 点击原作者tab
+        hidePane();
+        // 【核心修复】把所有 id^="cc-sect-" 的原生容器恢复显示，交还控制权！
+        document.querySelectorAll('[id^="cc-sect-"]').forEach(el=>{
+          if(el.id !== PANE_ID){
+            el.hidden = false;
           }
-        }, true);
-      } catch (e) {
-        console.warn('[Audit] Tab切换绑定失败', e);
+        })
       }
-    }
+    }, false); // 把true捕获模式改成false冒泡模式，不再抢占原网页事件
+  } catch (e) {
+    console.warn('[Audit] Tab切换绑定失败', e);
+  }
+}
+
 
     /* ---------------- 字卡库 UI ---------------- */
     function buildHTML() {
@@ -2547,6 +2566,7 @@
           } catch (e) {}
           if (tries > 30) clearInterval(timer);
         }, 2000);
+        markTabActive(false);
       } catch (e) {
         console.warn('[Audit] 模块二初始化失败', e);
       }
