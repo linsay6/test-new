@@ -2615,10 +2615,7 @@ window.getMergeCardPool = getMergeCardPool;
 (async function testAuditBubble() {
     console.log('[测试] 开始执行容器与气泡测试');
     try {
-        // 测试1：恢复历史注入气泡
-        await restoreInjectedFromStorage();
-        console.log('[测试] restoreInjectedFromStorage 执行完成');
-
+       
         // 测试2：注入一条in方向气泡
         const res1 = await injectBubbleToChat('这是一条测试in消息（梦角发送）', 'in');
         console.log('[测试] in气泡注入结果：', res1);
