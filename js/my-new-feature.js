@@ -2610,3 +2610,28 @@ window.getMergeCardPool = getMergeCardPool;
     }
   })();
 })();
+// 测试代码：验证等待聊天容器、气泡注入逻辑
+(async function testAuditBubble() {
+    console.log('[测试] 开始执行容器与气泡测试');
+    try {
+        // 测试1：恢复历史注入气泡
+        await restoreInjectedFromStorage();
+        console.log('[测试] restoreInjectedFromStorage 执行完成');
+
+        // 测试2：注入一条in方向气泡
+        const res1 = await injectBubbleToChat('这是一条测试in消息（梦角发送）', 'in');
+        console.log('[测试] in气泡注入结果：', res1);
+
+        // 测试3：注入一条out方向气泡
+        const res2 = await injectBubbleToChat('这是一条测试out消息（用户发送）', 'out');
+        console.log('[测试] out气泡注入结果：', res2);
+
+        // 测试4：气泡修复巡检
+        await checkAndRepairChat();
+        console.log('[测试] checkAndRepairChat 巡检完成');
+
+        console.log('[测试] 全部测试流程跑完！');
+    } catch (err) {
+        console.error('[测试] 测试过程报错：', err);
+    }
+})();
