@@ -1495,11 +1495,10 @@
     }
    function getChatContainer() {
     return new Promise((resolve) => {
-        const selector = '.chat-container,.msg-list,.chat-messages,.chat-list,[data-chat-container],.message-list,.chat-box,.chat-scroll,.chat-msgs,.messages-wrap,.chat-panel,#chat-scroll-container,[role="feed"],.message-feed';
-        let retryCount = 0;
-        const maxRetry = 20;
-        const interval = 150;
-
+    const selector = '[role="feed"],.message-feed,.chat-list,.message-list,.msg-list,.chat-msgs';
+let retryCount = 0;
+const maxRetry = 40;
+const interval = 200;
         function check() {
             const el = document.querySelector(selector);
             if (el) {
