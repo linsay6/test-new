@@ -1494,10 +1494,11 @@
       } catch (e) { return null; }
     }
     function getChatContainer() {
-      return document.querySelector(
-        '.chat-container, .msg-list, .chat-messages, .chat-list, [data-chat-container], .message-list, .chat-box, .chat-scroll, .chat-msgs, .messages-wrap, .chat-panel'
-      );
-    }
+  return document.querySelector(
+    '.chat-container, .msg-list, .chat-messages, .chat-list, [data-chat-container], .message-list, .chat-box, .chat-scroll, .chat-msgs, .messages-wrap, .chat-panel,#chat-scroll-container,[role="feed"],.message-feed'
+  );
+}
+
     function buildInjectedNode(text, side, style) {
       const node = document.createElement('div');
       node.dataset.maInjected = '1';
@@ -1580,6 +1581,7 @@ requestAnimationFrame(()=>{
 });
         injectedRegistry.push({ text: text, side: s, time: Date.now() });
         trimRegistry();
+        checkAndRepairChat();
         return true;
       } catch (e) {
         console.warn('[Audit] 气泡注入失败', e);
@@ -2028,27 +2030,28 @@ requestAnimationFrame(()=>{
     function bindTabSwitch() {
   try {
     document.addEventListener('click', function (e) {
-      const tab = e.target.closest ? e.target.closest('[data-ccsel]') : null;
-      if (!tab) return;
-      // 判断是否点击我们自己的tab
-      if (tab.matches(TAB_SELECTOR)) {
+      const tab = e.target.closest('[data-ccsel]');
+      // 点击【我方tab】
+      if (tab && tab.matches(TAB_SELECTOR)) {
         showPane();
-      } else {
-        // 点击原作者tab
+        return;
+      }
+      // 只要点击不在我方tab元素范围内，就执行交还逻辑
+      const clickInsideOurTab = e.target.closest(TAB_SELECTOR);
+      if (!clickInsideOurTab) {
         hidePane();
-        // 【核心修复】把所有 id^="cc-sect-" 的原生容器恢复显示，交还控制权！
-        document.querySelectorAll('[id^="cc-sect-"]').forEach(el=>{
-          if(el.id !== PANE_ID){
+        // 恢复全部原生sect
+        document.querySelectorAll('[id^="cc-sect-"]').forEach(el => {
+          if(el.id !== PANE_ID) {
             el.hidden = false;
           }
-        })
+        });
       }
-    }, false); // 把true捕获模式改成false冒泡模式，不再抢占原网页事件
+    }, false);
   } catch (e) {
     console.warn('[Audit] Tab切换绑定失败', e);
   }
 }
-
 
     /* ---------------- 字卡库 UI ---------------- */
     function buildHTML() {
