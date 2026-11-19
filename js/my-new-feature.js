@@ -1618,51 +1618,43 @@
                     if (sa.borderRadius) avatarRadius = sa.borderRadius;
                 }
 
-                var wrapper = document.createElement('div');
+                                var wrapper = document.createElement('div');
                 wrapper.setAttribute('data-ma-injected', '1');
-                wrapper.style.cssText = 'display: flex; align-items: flex-start; margin-bottom: 18px; padding: 10px 12px; width: 100%; box-sizing: border-box;';
+                wrapper.style.cssText = 'display: flex; align-items: flex-start; margin-bottom: 15px; padding: 10px; width: 100%; box-sizing: border-box;';
 
-                // 头像：只占左侧，不包裹时间
+                // 左侧垂直列：头像在上，时间戳头像正下方（和原生完全一样）
+                var leftCol = document.createElement('div');
+                leftCol.style.cssText = 'display: flex; flex-direction: column; align-items: center; margin-right: 12px; flex-shrink:0;';
+
                 var avatarEl;
-                let avatarW = 34, avatarH = 34;
-
-                if (sampleAvatar) {
+                // 读取原生头像真实宽高，不再写死38px
+                let avatarW = 36, avatarH = 36;
+                if(sampleAvatar){
                     const avaStyle = window.getComputedStyle(sampleAvatar);
-                    avatarW = parseInt(avaStyle.width) || 34;
-                    avatarH = parseInt(avaStyle.height) || 34;
-
+                    avatarW = parseInt(avaStyle.width) || 36;
+                    avatarH = parseInt(avaStyle.height) || 36;
                     avatarEl = sampleAvatar.cloneNode();
-                    avatarEl.style.cssText =
-                        'width:' + avatarW + 'px; height:' + avatarH + 'px; border-radius:' + avatarRadius + '; object-fit: cover; flex-shrink: 0;';
+                    avatarEl.style.cssText = `width:${avatarW}px; height:${avatarH}px; border-radius: ${avatarRadius}; object-fit: cover;`;
                 } else {
                     avatarEl = document.createElement('div');
-                    avatarEl.style.cssText =
-                        'width:' + avatarW + 'px; height:' + avatarH + 'px; border-radius:' + avatarRadius + '; background:#ddd; flex-shrink: 0;';
+                    avatarEl.style.cssText = `width:${avatarW}px; height:${avatarH}px; border-radius: ${avatarRadius}; background: #ddd;`;
                 }
 
-                // 右侧：气泡 + 时间戳纵向排列
-                var rightCol = document.createElement('div');
-                rightCol.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; margin-left: 10px; min-width: 0;';
+                var timeEl = document.createElement('div');
+                timeEl.style.cssText = 'font-size: 10px; color: #999; margin-top:4px; white-space: nowrap;';
+                var d = new Date();
+                timeEl.textContent = (d.getHours()<10?'0':'') + d.getHours() + ':' + (d.getMinutes()<10?'0':'') + d.getMinutes() + ':' + (d.getSeconds()<10?'0':'');
+
+                leftCol.appendChild(avatarEl);
+                leftCol.appendChild(timeEl);
 
                 var bubble = document.createElement('div');
                 Object.assign(bubble.style, bubbleStyle);
                 bubble.textContent = text;
                 bubble.className = 'bubble msg-content';
 
-                var timeEl = document.createElement('div');
-                timeEl.style.cssText = 'font-size: 10px; color: #999; margin-top: 3px; margin-left: 4px; white-space: nowrap;';
-
-                var d = new Date();
-                timeEl.textContent =
-                    (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' +
-                    (d.getMinutes() < 10 ? '0' : '') + d.getMinutes() + ':' +
-                    (d.getSeconds() < 10 ? '0' : '') + d.getSeconds();
-
-                rightCol.appendChild(bubble);
-                rightCol.appendChild(timeEl);
-
-                wrapper.appendChild(avatarEl);
-                wrapper.appendChild(rightCol);
+                wrapper.appendChild(leftCol);
+                wrapper.appendChild(bubble);
                 chatBody.appendChild(wrapper);
 
                 try { chatBody.scrollTop = chatBody.scrollHeight; window.scrollTo(0, document.body.scrollHeight); } catch (e) {}
@@ -1728,18 +1720,11 @@
                     const avaStyle = window.getComputedStyle(sampleAvatar);
                     avatarW = parseInt(avaStyle.width) || 36;
                     avatarH = parseInt(avaStyle.height) || 36;
-                                        let avatarW = 34, avatarH = 34;
-                    const avaStyle = window.getComputedStyle(sampleAvatar);
-                    avatarW = parseInt(avaStyle.width) || 34;
-                    avatarH = parseInt(avaStyle.height) || 34;
-
                     avatarEl = sampleAvatar.cloneNode();
-                    avatarEl.style.cssText =
-                        'width:' + avatarW + 'px; height:' + avatarH + 'px; border-radius:' + currentAvatarRadius + '; object-fit: cover; flex-shrink: 0;';
+                    avatarEl.style.cssText = `width:${avatarW}px; height:${avatarH}px; border-radius: ${currentAvatarRadius}; object-fit: cover;`;
                 } else {
                     avatarEl = document.createElement('div');
-                    avatarEl.style.cssText =
-                        'width:34px; height:34px; border-radius:' + currentAvatarRadius + '; background:#ddd; flex-shrink: 0;';
+                    avatarEl.style.cssText = `width:${avatarW}px; height:${avatarH}px; border-radius: ${currentAvatarRadius}; background: #ddd;`;
                 }
 
                 var leftCol = document.createElement('div');
