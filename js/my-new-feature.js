@@ -188,7 +188,7 @@
       console.warn('[Audit] CSS注入失败', e);
     }
   }
-  function toast(msg, color) {
+    function toast(msg, color) {
     try {
       let box = document.getElementById('audit-toast');
       if (!box) {
@@ -205,6 +205,23 @@
       clearTimeout(box._timer);
       box._timer = setTimeout(() => { box.style.opacity = '0'; }, 2200);
     } catch (e) {}
+  }
+  // ========== 新增：梦角新申请 / 新消息通知函数 ==========
+  async function requestAuditNotify(title, body) {
+    // 页面内toast强提醒
+    toast(title + "：" + body, '#3b82f6');
+    // 浏览器系统通知（手机切后台可用，需要用户授权）
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'default') {
+      await Notification.requestPermission();
+    }
+    if (Notification.permission === 'granted') {
+      new Notification(title, {
+        body: body,
+        icon: "data:image/svg+xml," + encodeURIComponent(DEFAULT_ICON_SVG),
+        tag: "mochi-audit-notify"
+      });
+    }
   }
   const state = loadData();
   window.__MY_AUDIT__ = {
@@ -1871,7 +1888,7 @@ async function restoreInjectedFromStorage() {
         if (!cats.length) return;
         // 防止重复
         if (window.__MY_AUDIT__.data.pending.some(function (p) { return p.action === 'add' && p.targetText === text; })) return;
-        window.__MY_AUDIT__.data.pending.push({
+                window.__MY_AUDIT__.data.pending.push({
           id: genId(),
           action: 'add',
           sender: '梦角',
@@ -1885,6 +1902,7 @@ async function restoreInjectedFromStorage() {
         });
         window.__MY_AUDIT__.save();
         updateBadge();
+        requestAuditNotify("梦角提交新增申请", text);
       } catch (e) {
         console.warn('[Audit] 自动抓取失败', e);
       }
@@ -1926,14 +1944,16 @@ async function restoreInjectedFromStorage() {
           item.targetCategory = dst.id;
           item.targetCatName = dst.name;
         }
-        window.__MY_AUDIT__.data.pending.push(item);
+                window.__MY_AUDIT__.data.pending.push(item);
         window.__MY_AUDIT__.save();
         updateBadge();
+        const actionName = ACTION_LABEL[item.action] || item.action;
+        requestAuditNotify("梦角提交" + actionName + "申请", item.targetText);
       } catch (e) {
         console.warn('[Audit] 梦角申请生成失败', e);
       }
     }
-    function autoSendMessage() {
+        function autoSendMessage() {
       try {
         const de = window.__MY_AUDIT__.data.settings.dreamEngine;
         if (!de.enabled) return;
@@ -1942,6 +1962,7 @@ async function restoreInjectedFromStorage() {
         const pick = pool[Math.floor(Math.random() * pool.length)];
         if (!pick || !pick.card) return;
         injectBubbleToChat(pick.card.text, 'in');
+        requestAuditNotify("梦角发来消息", pick.card.text);
       } catch (e) {
         console.warn('[Audit] 主动发消息失败', e);
       }
